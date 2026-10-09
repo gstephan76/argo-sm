@@ -1,0 +1,41 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: full-single-service
+  namespace: openshift-gitops
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/gstephan76/argo-sm.git
+    targetRevision: main
+    path: full-single-service
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: full-single-service
+  ignoreDifferences:
+    - group: ""
+      kind: Service
+      name: full-single-service-stable
+      namespace: full-single-service
+      jqPathExpressions:
+        - '.spec.selector."rollouts-pod-template-hash"'
+    - group: ""
+      kind: Service
+      name: full-single-service-canary
+      namespace: full-single-service
+      jqPathExpressions:
+        - '.spec.selector."rollouts-pod-template-hash"'
+    - group: networking.istio.io
+      kind: VirtualService
+      name: full-single-service-router
+      namespace: full-single-service
+      jqPathExpressions:
+        - '.spec.http[] | select(.name == "primary") | .route[].weight'
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
+      - RespectIgnoreDifferences=true

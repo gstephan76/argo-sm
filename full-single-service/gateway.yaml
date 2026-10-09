@@ -1,0 +1,18 @@
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: full-single-service-gateway
+  namespace: full-single-service
+  annotations:
+    argocd.argoproj.io/sync-wave: '0'
+spec:
+  selector:
+    istio: ingressgateway
+    app.kubernetes.io/component: full-single-service-ingressgateway
+  servers:
+    - port:
+        number: 8080
+        name: http
+        protocol: HTTP
+      hosts:
+        - '*'

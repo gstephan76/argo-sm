@@ -1,0 +1,56 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: full-single-service-smoke-test
+  namespace: full-single-service
+  annotations:
+    argocd.argoproj.io/sync-wave: '0'
+spec:
+  args:
+    - name: expected-color
+  metrics:
+    - name: candidate-color-and-http
+      count: 1
+      failureLimit: 0
+      provider:
+        job:
+          metadata:
+            labels:
+              app: full-single-service-analysis
+          spec:
+            backoffLimit: 0
+            activeDeadlineSeconds: 60
+            template:
+              metadata:
+                labels:
+                  app: full-single-service-analysis
+                  sidecar.istio.io/inject: 'false'
+              spec:
+                restartPolicy: Never
+                securityContext:
+                  seccompProfile:
+                    type: RuntimeDefault
+                containers:
+                  - name: smoke-test
+                    image: quay.io/curl/curl:8.22.0
+                    imagePullPolicy: IfNotPresent
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                      capabilities:
+                        drop: [ALL]
+                      runAsNonRoot: true
+                    command:
+                      - /bin/sh
+                      - -c
+                      - |
+                        set -eu
+                        url=http://full-single-service-canary.full-single-service.svc.cluster.local/color
+                        expected='"{{args.expected-color}}"'
+                        n=1
+                        while [ "$n" -le 3 ]; do
+                          got="$(curl --fail --silent --show-error --max-time 8 "$url")"
+                          echo "Probe $n: expected=$expected got=$got"
+                          [ "$got" = "$expected" ] || exit 1
+                          n=$((n + 1))
+                          sleep 1
+                        done

@@ -1,0 +1,28 @@
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: full-single-service-router
+  namespace: full-single-service
+  annotations:
+    argocd.argoproj.io/sync-wave: '0'
+spec:
+  hosts:
+    - '*'
+  gateways:
+    - full-single-service-gateway
+  http:
+    - name: primary
+      match:
+        - uri:
+            prefix: /
+      route:
+        - destination:
+            host: full-single-service-stable
+            port:
+              number: 80
+          weight: 100
+        - destination:
+            host: full-single-service-canary
+            port:
+              number: 80
+          weight: 0

@@ -2,8 +2,6 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - namespace.yaml
-  - configmap-httpd-v1.yaml
-  - configmap-httpd-v2.yaml
   - ingress-gateway.yaml
   - gateway.yaml
   - route-a.yaml
@@ -12,7 +10,6 @@ resources:
   - service-a-canary.yaml
   - analysis-template-a.yaml
   - rollout-a.yaml
-  - route-b.yaml
   - service-b-stable.yaml
   - service-b-canary.yaml
   - analysis-template-b.yaml

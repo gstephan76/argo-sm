@@ -7,7 +7,7 @@ APP="full-single-service"        # single Argo CD Application owns both Rollouts
 INSTANCE="${INSTANCE:-a}"
 case "$INSTANCE" in
   a) ROLLOUT="full-single-service-a"; ROUTE="full-single-service-a"; ROLLOUT_FILE="full-single-service/rollout-a.yaml" ;;
-  b) ROLLOUT="full-single-service-b"; ROUTE="full-single-service-b"; ROLLOUT_FILE="full-single-service/rollout-b.yaml" ;;
+  b) ROLLOUT="full-single-service-b"; ROUTE="full-single-service-a"; ROLLOUT_FILE="full-single-service/rollout-b.yaml" ;;
   *) echo "ERROR: INSTANCE must be a or b" >&2; exit 1 ;;
 esac
 ARGOCD_NS="${ARGOCD_NAMESPACE:-openshift-gitops}"
@@ -177,21 +177,21 @@ wait_sync() {
 
 wait_rollout() {
   local state="$1" marker="$2" end=$((SECONDS + TIMEOUT_SECONDS))
-  local phase spec_marker stable current step version
+  local phase spec_marker stable current step color
   while (( SECONDS < end )); do
     phase="$(get_rollout '{.status.phase}')"
     spec_marker="$(get_rollout '{.spec.template.metadata.annotations.demo-rollout-revision}')"
     stable="$(get_rollout '{.status.stableRS}')"
     current="$(get_rollout '{.status.currentPodHash}')"
     step="$(get_rollout '{.status.currentStepIndex}')"
-    version="$(get_rollout '{.spec.template.spec.volumes[0].configMap.name}')"
+    color="$(get_rollout '{.spec.template.spec.containers[0].env[0].value}')"
     printf '    phase=%s step=%s marker=%s stable=%s current=%s\n' "${phase:-?}" "${step:-?}" "${spec_marker:-?}" "${stable:-?}" "${current:-?}"
     [[ "$phase" != Degraded ]] || fatal "Rollout is Degraded"
     if [[ "$spec_marker" == "$marker" ]]; then
       case "$state" in
-        healthy) [[ "$phase" == Healthy && -n "$stable" && "$stable" == "$current" && "$version" == httpd-page-v1 ]] && return 0 ;;
-        paused) [[ "$phase" == Paused && "$step" == 10 && -n "$current" && "$stable" != "$current" && "$version" == httpd-page-v2 ]] && return 0 ;;
-        promoted) [[ "$phase" == Healthy && -n "$stable" && "$stable" == "$current" && "$version" == httpd-page-v2 ]] && return 0 ;;
+        healthy) [[ "$phase" == Healthy && -n "$stable" && "$stable" == "$current" && "$color" == "Application ${INSTANCE^^} - BLUE" ]] && return 0 ;;
+        paused) [[ "$phase" == Paused && "$step" == 10 && -n "$current" && "$stable" != "$current" && "$color" == "Application ${INSTANCE^^} - YELLOW" ]] && return 0 ;;
+        promoted) [[ "$phase" == Healthy && -n "$stable" && "$stable" == "$current" && "$color" == "Application ${INSTANCE^^} - YELLOW" ]] && return 0 ;;
         *) fatal "Invalid wait_rollout state: $state" ;;
       esac
     fi
@@ -206,12 +206,12 @@ spec_info() {
 }
 
 push_desired() {
-  local version="$1" marker="$2"
-  python3 scripts/full-single-service-spec.py set --instance "$INSTANCE" --version "$version" --marker "$marker"
+  local color="$1" marker="$2"
+  python3 scripts/full-single-service-spec.py set --instance "$INSTANCE" --color "$color" --marker "$marker"
   git add "$ROLLOUT_FILE"
   git diff --cached --check
   if ! git diff --cached --quiet; then
-    git commit -m "Set full-single-service instance ${INSTANCE} ${version} ${marker}"
+    git commit -m "Set full-single-service instance ${INSTANCE} ${color} ${marker}"
     git push origin main
   fi
   git fetch origin main
@@ -240,28 +240,28 @@ case "$command" in
     spec_info
     require_cluster
     oc get applications.argoproj.io "$APP" -n "$ARGOCD_NS" >/dev/null || fatal "Run deploy first"
-    push_desired v1 baseline-v1
+    push_desired blue baseline-blue
     wait_sync "$(git rev-parse HEAD)"
-    # Trusted recovery: full promotion only for the verified V1 ConfigMap.
-    live_image="$(get_rollout '{.spec.template.spec.volumes[0].configMap.name}')"
+    # Trusted recovery: full promotion only for verified BLUE state.
+    live_color="$(get_rollout '{.spec.template.spec.containers[0].env[0].value}')"
     live_marker="$(get_rollout '{.spec.template.metadata.annotations.demo-rollout-revision}')"
-    [[ "$live_image" == httpd-page-v1 && "$live_marker" == baseline-v1 ]] ||
-      fatal "Expected synchronized HTTPD V1 desired state before recovery promotion"
+    [[ "$live_color" == "Application ${INSTANCE^^} - BLUE" && "$live_marker" == baseline-blue ]] ||
+      fatal "Expected synchronized BLUE desired state before recovery promotion"
     stable="$(get_rollout '{.status.stableRS}')"
     current="$(get_rollout '{.status.currentPodHash}')"
     phase="$(get_rollout '{.status.phase}')"
     if [[ "$phase" != Healthy || -z "$stable" || "$stable" != "$current" ]]; then
       oc argo rollouts promote "$ROLLOUT" --full -n "$NS"
     fi
-    wait_rollout healthy baseline-v1
-    echo "Canonical HTTPD V1 baseline ready"
+    wait_rollout healthy baseline-blue
+    echo "Canonical BLUE baseline ready"
     ;;
   start)
     require_git_head
     spec_info
     require_cluster
     [[ "$(get_app '{.spec.source.repoURL}')" == "$EXPECTED_ORIGIN" ]] || fatal "Run deploy first"
-    if grep -Eq 'name: httpd-page-v2$' "$ROLLOUT_FILE"; then
+    if grep -Fq "              value: \"Application ${INSTANCE^^} - YELLOW\"" "$ROLLOUT_FILE"; then
       wait_sync "$(git rev-parse HEAD)"
       marker="$(get_rollout '{.spec.template.metadata.annotations.demo-rollout-revision}')"
       spec_marker="$(sed -n -E 's/^[[:space:]]*demo-rollout-revision:[[:space:]]*([^[:space:]]+)[[:space:]]*$/\1/p' "$ROLLOUT_FILE" | head -1)"
@@ -269,21 +269,21 @@ case "$command" in
       if [[ "$(get_rollout '{.status.phase}')" == Healthy &&
             "$(get_rollout '{.status.stableRS}')" == "$(get_rollout '{.status.currentPodHash}')" ]]; then
         wait_rollout promoted "$spec_marker"
-        echo "HTTPD V2 already promoted"
+        echo "YELLOW already promoted"
         exit 0
       fi
       wait_rollout paused "$spec_marker"
     else
       wait_sync "$(git rev-parse HEAD)"
-      [[ "$(get_rollout '{.status.phase}')" == Healthy ]] || fatal "Prepare HTTPD V1 first"
-      [[ "$(get_rollout '{.spec.template.spec.volumes[0].configMap.name}')" == httpd-page-v1 ]] || fatal "Expected HTTPD V1 stable"
-      [[ "$(get_rollout '{.status.stableRS}')" == "$(get_rollout '{.status.currentPodHash}')" ]] || fatal "V1 stable/current hashes differ"
-      marker="candidate-v2-$(date -u +%Y%m%dT%H%M%SZ)"
-      push_desired v2 "$marker"
+      [[ "$(get_rollout '{.status.phase}')" == Healthy ]] || fatal "Prepare BLUE first"
+      [[ "$(get_rollout '{.spec.template.spec.containers[0].env[0].value}')" == "Application ${INSTANCE^^} - BLUE" ]] || fatal "Expected BLUE stable"
+      [[ "$(get_rollout '{.status.stableRS}')" == "$(get_rollout '{.status.currentPodHash}')" ]] || fatal "BLUE stable/current hashes differ"
+      marker="candidate-yellow-$(date -u +%Y%m%dT%H%M%SZ)"
+      push_desired yellow "$marker"
       wait_sync "$(git rev-parse HEAD)"
       wait_rollout paused "$marker"
     fi
-    echo "HTTPD V2 at final manual pause (Istio 100% candidate); run promote"
+    echo "YELLOW at final manual pause (Istio 100% candidate); run promote"
     ;;
   promote)
     require_git_head
@@ -292,16 +292,16 @@ case "$command" in
     wait_sync "$(git rev-parse HEAD)"
     marker="$(get_rollout '{.spec.template.metadata.annotations.demo-rollout-revision}')"
     expected_marker="$(sed -n -E 's/^[[:space:]]*demo-rollout-revision:[[:space:]]*([^[:space:]]+)[[:space:]]*$/\1/p' "$ROLLOUT_FILE" | head -1)"
-    [[ "$marker" == "$expected_marker" && "$marker" == candidate-v2-* ]] || fatal "Candidate marker mismatch"
+    [[ "$marker" == "$expected_marker" && "$marker" == candidate-yellow-* ]] || fatal "Candidate marker mismatch"
     if [[ "$(get_rollout '{.status.phase}')" == Healthy ]]; then
       wait_rollout promoted "$marker"
-      echo "HTTPD V2 already promoted"
+      echo "YELLOW already promoted"
       exit 0
     fi
     [[ "$(get_rollout '{.status.phase}')" == Paused && "$(get_rollout '{.status.currentStepIndex}')" == 10 ]] || fatal "Not at final promotion gate"
     oc argo rollouts promote "$ROLLOUT" -n "$NS"
     wait_rollout promoted "$marker"
-    echo "HTTPD V2 promoted and Healthy"
+    echo "YELLOW promoted and Healthy"
     ;;
   status)
     require_cluster
@@ -315,25 +315,36 @@ case "$command" in
     need curl
     requests="${REQUESTS:-50}"
     [[ "$requests" =~ ^[1-9][0-9]*$ && "$requests" -le 10000 ]] || fatal "REQUESTS must be 1..10000"
+    # Both instances use a single public entry point; the header selects A or B.
     host="$(oc get route "$ROUTE" -n "$NS" -o jsonpath='{.spec.host}')"
     [[ -n "$host" ]] || fatal "Route host not found"
     interval="${TRAFFIC_INTERVAL_SECONDS:-0.2}"
     [[ "$interval" =~ ^[0-9]+([.][0-9]+)?$ ]] || fatal "Invalid TRAFFIC_INTERVAL_SECONDS"
-    v1=0 v2=0 errors=0
+    blue=0 yellow=0 errors=0
+    app_id="${INSTANCE^^}"
     for ((i=1;i<=requests;i++)); do
-      page="$(curl --silent --show-error --fail --insecure --max-time 10 "https://${host}/" 2>/dev/null || true)"
-      case "$page" in
-        *'Revision V1'*) ((v1+=1));;
-        *'Revision V2'*) ((v2+=1));;
-        *) ((errors+=1));;
-      esac
+      response="$(curl --silent --show-error --fail --insecure --max-time 10 \
+        -H "x-app-target: $INSTANCE" "https://${host}/" 2>/dev/null || true)"
+      # The greeter returns a single line, including the request count and pod name.
+      # Example: Application A - BLUE  greeter => 'pod-name' : 12
+      if [[ "$response" =~ ^Application[[:space:]]${app_id}[[:space:]]-[[:space:]](BLUE|YELLOW)[[:space:]].*:[[:space:]]*([0-9]+)$ ]]; then
+        case "${BASH_REMATCH[1]}" in
+          BLUE) ((blue+=1)) ;;
+          YELLOW) ((yellow+=1)) ;;
+        esac
+        [[ "${SHOW_RESPONSES:-0}" != 1 ]] || printf '%s\n' "$response"
+      else
+        ((errors+=1))
+        echo "    unexpected response: ${response:0:160}" >&2
+      fi
       if (( i % 25 == 0 || i == requests )); then
-        printf '    instance %s: completed %d/%d (V1=%d V2=%d errors=%d)\n' \
-          "$INSTANCE" "$i" "$requests" "$v1" "$v2" "$errors"
+        printf '    instance %s: completed %d/%d (BLUE=%d YELLOW=%d errors=%d)\n' \
+          "$INSTANCE" "$i" "$requests" "$blue" "$yellow" "$errors"
       fi
       sleep "$interval"
     done
-    printf 'Instance %s: Route https://%s/ -> V1=%d V2=%d errors=%d of %d\n' "$INSTANCE" "$host" "$v1" "$v2" "$errors" "$requests"
+    printf 'Instance %s: x-app-target=%s via https://%s/ -> BLUE=%d YELLOW=%d errors=%d of %d\n' \
+      "$INSTANCE" "$INSTANCE" "$host" "$blue" "$yellow" "$errors" "$requests"
     (( errors == 0 )) || fatal "Some requests failed"
     ;;
   help|-h|--help)
@@ -345,11 +356,11 @@ Both instances are managed by the same Argo CD Application and share a namespace
 
   validate  Validate new files OFFLINE (no cluster commands)
   deploy    Apply ONLY this demo's Argo CD Application; show sync progress and diagnostics
-  prepare   Declaratively restore HTTPD V1 baseline and recover trusted state
-  start     Commit/push HTTPD V2 candidate and wait for final pause
-  promote   Approve HTTPD V2 after the last analysis gate
-  traffic   Send REQUESTS=50 traffic samples through selected Route and count V1/V2 revisions
-            TRAFFIC_INTERVAL_SECONDS=0.2 spaces requests for Kiali visibility
+  prepare   Declaratively restore BLUE baseline and recover trusted state
+  start     Commit/push YELLOW candidate and wait for final pause
+  promote   Approve YELLOW after the last analysis gate
+  traffic   Send REQUESTS=50 greeter requests via x-app-target on shared A Route
+            TRAFFIC_INTERVAL_SECONDS=0.2 spaces requests; SHOW_RESPONSES=1 prints each counter
   status    Show live Application, Rollout, and Istio VirtualService
 
 Set TIMEOUT_SECONDS=180 for a shorter wait; OC_REQUEST_TIMEOUT=12s caps API reads.

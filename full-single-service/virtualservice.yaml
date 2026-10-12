@@ -11,27 +11,13 @@ spec:
   gateways:
     - full-single-service-gateway
   http:
-    - name: primary
-      match:
-        - authority:
-            regex: '^full-single-service-a-full-single-service\..*$'
-          uri:
-            prefix: /
-      route:
-        - destination:
-            host: full-single-service-a-stable
-            port:
-              number: 80
-          weight: 100
-        - destination:
-            host: full-single-service-a-canary
-            port:
-              number: 80
-          weight: 0
+    # The B match MUST precede primary's default catch-all.
+    # The route names are still owned by their respective Argo Rollouts.
     - name: secondary
       match:
-        - authority:
-            regex: '^full-single-service-b-full-single-service\..*$'
+        - headers:
+            x-app-target:
+              exact: b
           uri:
             prefix: /
       route:
@@ -42,6 +28,22 @@ spec:
           weight: 100
         - destination:
             host: full-single-service-b-canary
+            port:
+              number: 80
+          weight: 0
+    - name: primary
+      # Missing header, explicit A, or any other value defaults to A.
+      match:
+        - uri:
+            prefix: /
+      route:
+        - destination:
+            host: full-single-service-a-stable
+            port:
+              number: 80
+          weight: 100
+        - destination:
+            host: full-single-service-a-canary
             port:
               number: 80
           weight: 0

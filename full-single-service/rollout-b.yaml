@@ -6,7 +6,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: '1'
 spec:
-  replicas: 4
+  replicas: 1
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -14,21 +14,24 @@ spec:
   template:
     metadata:
       annotations:
-        demo-rollout-revision: baseline-v1
+        demo-rollout-revision: baseline-blue
         prometheus.io/scrape: 'true'
         prometheus.io/path: /stats/prometheus
         prometheus.io/port: '15090'
       labels:
         app: full-single-service-b
-        app.kubernetes.io/name: httpd-single-page
+        app.kubernetes.io/name: knative-tutorial-greeter
         app.kubernetes.io/instance: full-single-service-b
         sidecar.istio.io/inject: 'true'
     spec:
       containers:
-        - name: httpd
-          # UBI9 HTTPD image from knative/app/service.yaml in argocd-bluegreen.
-          image: registry.access.redhat.com/ubi9/httpd-24:latest
+        - name: greeter
+          # Quarkus Knative tutorial greeter: per-pod request count included.
+          image: quay.io/rhdevelopers/knative-tutorial-greeter:quarkus
           imagePullPolicy: IfNotPresent
+          env:
+            - name: MESSAGE_PREFIX
+              value: "Application B - BLUE"
           ports:
             - name: http
               containerPort: 8080
@@ -50,18 +53,13 @@ spec:
             limits:
               cpu: 500m
               memory: 256Mi
-          volumeMounts:
-            - name: page
-              mountPath: /var/www/html/index.html
-              subPath: index.html
-              readOnly: true
-      volumes:
-        - name: page
-          configMap:
-            name: httpd-page-v1
-            items:
-              - key: index.html
-                path: index.html
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
   strategy:
     canary:
       maxUnavailable: 0
@@ -80,34 +78,34 @@ spec:
             templates:
               - templateName: full-single-service-b-smoke-test
             args:
-              - name: expected-version
-                value: v1
+              - name: expected-color
+                value: BLUE
         - setWeight: 25
         - analysis:
             templates:
               - templateName: full-single-service-b-smoke-test
             args:
-              - name: expected-version
-                value: v1
+              - name: expected-color
+                value: BLUE
         - setWeight: 50
         - analysis:
             templates:
               - templateName: full-single-service-b-smoke-test
             args:
-              - name: expected-version
-                value: v1
+              - name: expected-color
+                value: BLUE
         - setWeight: 75
         - analysis:
             templates:
               - templateName: full-single-service-b-smoke-test
             args:
-              - name: expected-version
-                value: v1
+              - name: expected-color
+                value: BLUE
         - setWeight: 100
         - analysis:
             templates:
               - templateName: full-single-service-b-smoke-test
             args:
-              - name: expected-version
-                value: v1
+              - name: expected-color
+                value: BLUE
         - pause: {} # operator-controlled final promotion

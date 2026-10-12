@@ -1,100 +1,126 @@
 #!/usr/bin/env python3
-"""Validate or set V1/V2 HTTPD ConfigMap on one of two Istio Rollouts (offline)."""
+"""Offline validation and safe BLUE/YELLOW editing for the A/B Quarkus greeters."""
 import argparse
 from pathlib import Path
 import re
 
 ROOT = Path(__file__).resolve().parent.parent
-PARTS = ROOT / 'full-single-service'
-SPECS = {i: PARTS / f'rollout-{i}.yaml' for i in ('a', 'b')}
-MANIFEST = ROOT / 'argocd' / 'application-full-single-service.yaml'
+PARTS = ROOT / "full-single-service"
+SPECS = {i: PARTS / f"rollout-{i}.yaml" for i in ("a", "b")}
+MANIFEST = ROOT / "argocd" / "application-full-single-service.yaml"
 FILES = {
-    'namespace.yaml', 'configmap-httpd-v1.yaml', 'configmap-httpd-v2.yaml',
-    'ingress-gateway.yaml', 'gateway.yaml', 'route-a.yaml', 'route-b.yaml',
-    'virtualservice.yaml', 'service-a-stable.yaml', 'service-a-canary.yaml',
-    'service-b-stable.yaml', 'service-b-canary.yaml',
-    'analysis-template-a.yaml', 'analysis-template-b.yaml',
-    'rollout-a.yaml', 'rollout-b.yaml', 'podmonitor-istio-proxies.yaml',
+    "namespace.yaml", "ingress-gateway.yaml", "gateway.yaml", "route-a.yaml",
+    "virtualservice.yaml", "service-a-stable.yaml", "service-a-canary.yaml",
+    "service-b-stable.yaml", "service-b-canary.yaml", "analysis-template-a.yaml",
+    "analysis-template-b.yaml", "rollout-a.yaml", "rollout-b.yaml", "podmonitor-istio-proxies.yaml",
 }
-IMAGE = 'registry.access.redhat.com/ubi9/httpd-24:latest'
+IMAGE = "quay.io/rhdevelopers/knative-tutorial-greeter:quarkus"
 
-def abort(message):
-    raise SystemExit('ERROR: ' + message)
 
-def replace_n(text, pattern, replacement, expected, desc):
-    result, count = re.subn(pattern, lambda _: replacement, text, flags=re.M)
-    if count != expected:
-        abort(f'{desc}: expected {expected} matches, found {count}')
-    return result
+def abort(msg):
+    raise SystemExit("ERROR: " + msg)
+
+
+def replace_exact(text, pattern, replacement, total, label):
+    new, found = re.subn(pattern, lambda m: replacement, text, flags=re.M)
+    if found != total:
+        abort(f"{label}: expected {total}, found {found}")
+    return new
+
 
 def verify(instance):
-    raw = (PARTS / 'kustomization.yaml').read_text()
-    listed = re.findall(r'^  - ([a-z0-9-]+\.yaml)$', raw, re.M)
+    listed = re.findall(r"^  - ([a-z0-9-]+\.yaml)$",
+                        (PARTS / "kustomization.yaml").read_text(), re.M)
     if set(listed) != FILES or len(listed) != len(FILES):
-        abort('Kustomization resources differ from expected two-instance manifest set')
-    for name in FILES:
-        if not (PARTS / name).is_file(): abort('Missing resource ' + name)
-    for version in ('v1', 'v2'):
-        cm = (PARTS / f'configmap-httpd-{version}.yaml').read_text()
-        if f'name: httpd-page-{version}' not in cm or f'Revision {version.upper()}' not in cm:
-            abort('Bad ConfigMap ' + version)
+        abort("Kustomization mismatch")
+    for file in FILES:
+        if not (PARTS / file).is_file():
+            abort("Missing Kustomization resource: " + file)
+    for retired in ("configmap-httpd-v1.yaml", "configmap-httpd-v2.yaml", "configmap-counter-server.yaml", "route-b.yaml"):
+        if (PARTS / retired).exists():
+            abort("Retired ConfigMap still tracked: " + retired)
     app = MANIFEST.read_text()
-    for fragment in ('repoURL: https://github.com/gstephan76/argo-sm.git',
-                     'path: full-single-service', 'namespace: full-single-service'):
-        if fragment not in app: abort('Argo CD Application mismatch: '+fragment)
-    vs = (PARTS / 'virtualservice.yaml').read_text()
-    for fragment in ('name: primary', 'name: secondary',
-                     'host: full-single-service-a-stable',
-                     'host: full-single-service-b-stable'):
-        if fragment not in vs: abort('VirtualService mismatch: '+fragment)
+    for fragment in ("repoURL: https://github.com/gstephan76/argo-sm.git",
+                     "path: full-single-service", "namespace: full-single-service"):
+        if fragment not in app:
+            abort("Argo CD mismatch: " + fragment)
+    routing = (PARTS / "virtualservice.yaml").read_text()
+    for fragment in ("name: primary", "name: secondary",
+                     "host: full-single-service-a-stable", "host: full-single-service-a-canary",
+                     "host: full-single-service-b-stable", "host: full-single-service-b-canary"):
+        if fragment not in routing: abort("VirtualService mismatch: " + fragment)
+    # One OpenShift Route: B's explicit header match must precede A's catch-all.
+    if not (routing.index("    - name: secondary\n") < routing.index("    - name: primary\n")):
+        abort("Secondary B route must precede primary default A route")
+    secondary = routing.split("    - name: secondary\n", 1)[1].split("    - name: primary\n", 1)[0]
+    primary = routing.split("    - name: primary\n", 1)[1]
+    for fragment in ("x-app-target:", "exact: b", "host: full-single-service-b-stable", "host: full-single-service-b-canary"):
+        if fragment not in secondary: abort("B header selection missing: " + fragment)
+    for fragment in ("uri:", "prefix: /", "host: full-single-service-a-stable", "host: full-single-service-a-canary"):
+        if fragment not in primary: abort("A default selection missing: " + fragment)
+    if "x-app-target:" in primary or "x-app-target:" in (PARTS / "route-a.yaml").read_text():
+        abort("A default route or OpenShift Route unexpectedly match selection header")
     spec = SPECS[instance].read_text()
-    if len(re.findall('image: '+re.escape(IMAGE)+'$',spec,re.M)) != 1:
-        abort('Expected exact UBI9 HTTPD container image')
-    if 'httpGet:' in spec or spec.count('tcpSocket:') != 2:
-        abort('Both probes must use tcpSocket, not HTTP')
-    if 'mountPath: /var/www/html/index.html' not in spec:
-        abort('Missing Knative-style document root mount')
-    if f'name: full-single-service-{instance}\n' not in spec:
-        abort('Unexpected Rollout resource name')
-    versions = re.findall(r'^            name: httpd-page-(v[12])$',spec,re.M)
-    markers = re.findall(r'^        demo-rollout-revision: (\S+)$',spec,re.M)
-    expected = re.findall(r'^                value: (v[12])$',spec,re.M)
-    if len(versions)!=1 or len(markers)!=1 or len(expected)!=5 or any(e!=versions[0] for e in expected):
-        abort('ConfigMap, revision marker, and five analysis gates do not match')
-    v, marker=versions[0], markers[0]
-    if v=='v1' and marker!='baseline-v1': abort('V1 must use baseline-v1')
-    if v=='v2' and not re.fullmatch(r'candidate-v2-[0-9]{8}T[0-9]{6}Z',marker):
-        abort('V2 marker must have timestamp candidate-v2-YYYYMMDDTHHMMSSZ')
-    analysis=(PARTS / f'analysis-template-{instance}.yaml').read_text()
-    if 'expected-version' not in analysis or 'Revision V1' not in analysis or 'Revision V2' not in analysis:
-        abort('Analysis must check V1 or V2 candidate page')
-    return v,marker
+    letter = instance.upper()
+    for fragment in (f"name: full-single-service-{instance}\n", "  replicas: 1\n",
+                     f"image: {IMAGE}", "name: MESSAGE_PREFIX",
+                     "tcpSocket:", "maxSurge: 1", "maxUnavailable: 0"):
+        if fragment not in spec: abort(f"Missing {instance} Rollout contract: {fragment}")
+    if spec.count("tcpSocket:") != 2 or "httpGet:" in spec or "volumeMounts:" in spec:
+        abort("Probes must be TCP and no ConfigMap volume may remain")
+    prefixes = re.findall(r'^              value: "(Application [AB] - (?:BLUE|YELLOW))"$', spec, re.M)
+    markers = re.findall(r'^        demo-rollout-revision: (\S+)$', spec, re.M)
+    gate_colors = re.findall(r'^                value: (BLUE|YELLOW)$', spec, re.M)
+    if len(prefixes) != 1 or len(markers) != 1 or len(gate_colors) != 5:
+        abort("Must have exactly one MESSAGE_PREFIX, marker, and five analysis colors")
+    prefix = prefixes[0]
+    if not prefix.startswith(f"Application {letter} - "):
+        abort("Wrong application identifier in MESSAGE_PREFIX")
+    color = prefix.split(" - ", 1)[1]
+    if any(x != color for x in gate_colors):
+        abort("Canary analysis colors do not match MESSAGE_PREFIX")
+    marker = markers[0]
+    if color == "BLUE" and marker != "baseline-blue":
+        abort("BLUE marker must be baseline-blue")
+    if color == "YELLOW" and not re.fullmatch(r'candidate-yellow-[0-9]{8}T[0-9]{6}Z', marker):
+        abort("YELLOW marker must be timestamped")
+    analysis = (PARTS / f"analysis-template-{instance}.yaml").read_text()
+    for fragment in ("name: expected-color", f"Application {letter}",
+                     "candidate-greeting-and-counter", "[0-9]+$"):
+        if fragment not in analysis:
+            abort("Missing AnalysisTemplate requirement: " + fragment)
+    return color, marker
+
 
 def main():
-    parser=argparse.ArgumentParser()
-    parser.add_argument('command',choices=['verify','set'])
-    parser.add_argument('--instance',choices=['a','b'],default='a')
-    parser.add_argument('--version',choices=['v1','v2'])
+    parser = argparse.ArgumentParser()
+    parser.add_argument('command', choices=('verify', 'set'))
+    parser.add_argument('--instance', choices=('a', 'b'), default='a')
+    parser.add_argument('--color', choices=('blue', 'yellow'))
     parser.add_argument('--marker')
-    a=parser.parse_args()
-    old,marker=verify(a.instance)
-    if a.command=='verify':
-        print(f'PASS: HTTPD {a.instance}: {old} ({marker})')
+    args = parser.parse_args()
+    old, marker = verify(args.instance)
+    if args.command == 'verify':
+        print(f'PASS: Application {args.instance.upper()}: {old} ({marker}), replicas=1')
         return
-    if not a.version or not a.marker: abort('set requires --version and --marker')
-    if a.version=='v1' and a.marker!='baseline-v1': abort('V1 needs baseline-v1 marker')
-    if a.version=='v2' and not re.fullmatch(r'candidate-v2-[0-9]{8}T[0-9]{6}Z',a.marker):
-        abort('Invalid V2 marker')
-    p=SPECS[a.instance]
-    data=p.read_text()
-    data=replace_n(data,r'^        demo-rollout-revision: \S+$',
-                   '        demo-rollout-revision: '+a.marker,1,'revision annotation')
-    data=replace_n(data,r'^            name: httpd-page-v[12]$',
-                   '            name: httpd-page-'+a.version,1,'page ConfigMap')
-    data=replace_n(data,r'^                value: v[12]$',
-                   '                value: '+a.version,5,'analysis args')
+    if not args.color or not args.marker:
+        abort('set requires --color and --marker')
+    color = args.color.upper()
+    if color == 'BLUE' and args.marker != 'baseline-blue':
+        abort('BLUE marker must be baseline-blue')
+    if color == 'YELLOW' and not re.fullmatch(r'candidate-yellow-[0-9]{8}T[0-9]{6}Z', args.marker):
+        abort('Invalid YELLOW marker')
+    p = SPECS[args.instance]
+    data = p.read_text()
+    data = replace_exact(data, r'^        demo-rollout-revision: \S+$',
+                         '        demo-rollout-revision: '+args.marker, 1, 'revision marker')
+    data = replace_exact(data, r'^              value: "Application [AB] - (?:BLUE|YELLOW)"$',
+                         f'              value: "Application {args.instance.upper()} - {color}"', 1, 'message prefix')
+    data = replace_exact(data, r'^                value: (BLUE|YELLOW)$',
+                         '                value: '+color, 5, 'analysis args')
     p.write_text(data)
-    verify(a.instance)
-    print(f'Set HTTPD {a.instance} to {a.version} ({a.marker})')
+    verify(args.instance)
+    print(f'Set Application {args.instance.upper()} to {color} ({args.marker})')
 
-if __name__=='__main__': main()
+if __name__ == '__main__':
+    main()

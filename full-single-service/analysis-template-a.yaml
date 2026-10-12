@@ -7,9 +7,9 @@ metadata:
     argocd.argoproj.io/sync-wave: '0'
 spec:
   args:
-    - name: expected-version
+    - name: expected-color
   metrics:
-    - name: candidate-html-and-http
+    - name: candidate-greeting-and-counter
       count: 1
       failureLimit: 0
       provider:
@@ -45,17 +45,21 @@ spec:
                       - |
                         set -eu
                         url=http://full-single-service-a-canary.full-single-service.svc.cluster.local/
-                        expected="Revision {{args.expected-version}}"
-                        case "$expected" in
-                          'Revision v1') expected='Revision V1' ;;
-                          'Revision v2') expected='Revision V2' ;;
-                          *) echo 'Unsupported expected revision' >&2; exit 1 ;;
+                        expected='Application A - {{args.expected-color}}'
+                        case "{{args.expected-color}}" in
+                          BLUE|YELLOW) ;;
+                          *) echo 'Unsupported expected color' >&2; exit 1 ;;
                         esac
                         n=1
                         while [ "$n" -le 3 ]; do
                           got="$(curl --fail --silent --show-error --max-time 8 "$url")"
-                          echo "Probe $n: checking $expected"
-                          printf '%s' "$got" | grep -Fq "$expected" || exit 1
+                          # Prefix identifies this application and the selected color.
+                          # Last colon-separated number is the greeter's per-pod counter.
+                          printf '%s\n' "$got" | grep -Eq '^Application A - {{args.expected-color}}[[:space:]].*:[[:space:]]*[0-9]+$' || {
+                            echo "Unexpected greeter reply: $got" >&2
+                            exit 1
+                          }
+                          echo "Probe $n: $got"
                           n=$((n + 1))
                           sleep 1
                         done

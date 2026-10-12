@@ -1,0 +1,427 @@
+diff --git a/argocd/application-full-single-service.yaml b/argocd/application-full-single-service.yaml
+index d99b740..e9d4542 100644
+--- a/argocd/application-full-single-service.yaml
++++ b/argocd/application-full-single-service.yaml
+@@ -15,13 +15,13 @@ spec:
+   ignoreDifferences:
+     - group: ""
+       kind: Service
+-      name: full-single-service-stable
++      name: full-single-service-a-stable
+       namespace: full-single-service
+       jqPathExpressions:
+         - '.spec.selector."rollouts-pod-template-hash"'
+     - group: ""
+       kind: Service
+-      name: full-single-service-canary
++      name: full-single-service-a-canary
+       namespace: full-single-service
+       jqPathExpressions:
+         - '.spec.selector."rollouts-pod-template-hash"'
+diff --git a/full-single-service/README.md b/full-single-service/README.md
+index ab48e69..e734234 100644
+--- a/full-single-service/README.md
++++ b/full-single-service/README.md
+@@ -20,8 +20,8 @@ strategy intentionally differs.
+ | --- | --- |
+ | Namespace | `full-single-service` |
+ | Argo CD Application | `full-single-service` in `openshift-gitops` |
+-| Rollouts | `full-single-service` (A), `full-single-service-b` (B), 4 replicas each |
+-| Ingress Routes | `full-single-service` (A), `full-single-service-b` (B) |
++| Rollouts | `full-single-service-a` (A), `full-single-service-b` (B), 4 replicas each |
++| Ingress Routes | `full-single-service-a` (A), `full-single-service-b` (B) |
+ | Istio VirtualService | `full-single-service-router`, named routes `primary` (A) and `secondary` (B) |
+ | Stable/Canary Services | One independent stable/canary Service pair per instance |
+ | Progression | 10% → 25% → 50% → 75% → 100% |
+@@ -53,6 +53,42 @@ The Istio workload injection and isolated gateway follow the current
+ services or blackbox/downstream-chain Prometheus analyses: each canary gate
+ runs a bounded Kubernetes Job against the candidate Service `/color` endpoint.
+ 
++## Explicit A/B manifest and Kubernetes naming
++
++Manifest filenames are now symmetrical: `rollout-a.yaml` / `rollout-b.yaml`,
++`route-a.yaml` / `route-b.yaml`, `service-a-stable.yaml` /
++`service-b-stable.yaml`, `service-a-canary.yaml` /
++`service-b-canary.yaml`, and `analysis-template-a.yaml` /
++`analysis-template-b.yaml`. Shared infrastructure manifests remain shared.
++
++Rollouts are named `full-single-service-a` and `full-single-service-b`.
++Application A Services are named `full-single-service-a-stable` and
++`full-single-service-a-canary`. Application B remains unchanged.
++Application A's public OpenShift Route is now `full-single-service-a`;
++B remains `full-single-service-b`. The external A hostname therefore changes.
++
++**Migration warning:** Kubernetes resources cannot be renamed in place. When
++these changes reach `main`, automatic Argo CD pruning creates a replacement A
++Rollout, A Services, and A Route, and removes the old names. The new A uses a
++distinct `app: full-single-service-a` selector. Plan a maintenance window; A
++traffic can briefly return 404/503 while the new Route, VirtualService route,
++Services, and Rollout reconcile. Do not run the prepare/start/promote commands
++while resources are being migrated. B resources are not renamed.
++
++Both application Rollouts use a **TCP socket** readiness and liveness probe
++against named port `http` (TCP/8080). These probes do not issue HTTP requests
++through `/`, so they do not generate HTTP request metrics for Kiali. Kiali should
++primarily show externally generated traffic during steady state. However,
++AnalysisTemplate Jobs still perform three candidate `/color` HTTP requests per
++analysis gate, and any other external callers can appear in Kiali. To view
++traffic generator activity alone, run the generators after analyses finish and
++use a Kiali graph interval excluding those analysis runs. The application has
++no automatic service-to-service calling loop.
++
++The Argo CD Application definition in `argocd/` must also be applied separately
++when opting to deploy; it lies outside the `full-single-service/` source path.
++Its `ignoreDifferences` entries now use A's renamed Services.
++
+ ## Prerequisites
+ 
+ - OpenShift with OpenShift Service Mesh 3.4+ (`Istio/default` and
+@@ -94,7 +130,7 @@ INSTANCE=b bash scripts/full-single-service.sh start
+ In another terminal, watch the candidate progress:
+ 
+ ```bash
+-oc argo rollouts get rollout full-single-service \
++oc argo rollouts get rollout full-single-service-a \
+   -n full-single-service --watch
+ 
+ oc get virtualservice full-single-service-router \
+@@ -157,11 +193,11 @@ without changing the other instance. There is **one Argo CD Application**
+ 
+ | | Instance A (existing) | Instance B (new) |
+ |---|---|---|
+-| Rollout | `full-single-service` | `full-single-service-b` |
+-| Route | `full-single-service` | `full-single-service-b` |
+-| Stable Service | `full-single-service-stable` | `full-single-service-b-stable` |
+-| Canary Service | `full-single-service-canary` | `full-single-service-b-canary` |
+-| AnalysisTemplate | `full-single-service-smoke-test` | `full-single-service-b-smoke-test` |
++| Rollout | `full-single-service-a` | `full-single-service-b` |
++| Route | `full-single-service-a` | `full-single-service-b` |
++| Stable Service | `full-single-service-a-stable` | `full-single-service-b-stable` |
++| Canary Service | `full-single-service-a-canary` | `full-single-service-b-canary` |
++| AnalysisTemplate | `full-single-service-a-smoke-test` | `full-single-service-b-smoke-test` |
+ | Named VirtualService route | `primary` | `secondary` |
+ 
+ The single shared `full-single-service-router` VirtualService distinguishes
+diff --git a/full-single-service/analysis-template.yaml b/full-single-service/analysis-template-a.yaml
+similarity index 86%
+rename from full-single-service/analysis-template.yaml
+rename to full-single-service/analysis-template-a.yaml
+index b3e6cc2..c3356a7 100644
+--- a/full-single-service/analysis-template.yaml
++++ b/full-single-service/analysis-template-a.yaml
+@@ -1,7 +1,7 @@
+ apiVersion: argoproj.io/v1alpha1
+ kind: AnalysisTemplate
+ metadata:
+-  name: full-single-service-smoke-test
++  name: full-single-service-a-smoke-test
+   namespace: full-single-service
+   annotations:
+     argocd.argoproj.io/sync-wave: '0'
+@@ -16,14 +16,14 @@ spec:
+         job:
+           metadata:
+             labels:
+-              app: full-single-service-analysis
++              app: full-single-service-a-analysis
+           spec:
+             backoffLimit: 0
+             activeDeadlineSeconds: 60
+             template:
+               metadata:
+                 labels:
+-                  app: full-single-service-analysis
++                  app: full-single-service-a-analysis
+                   sidecar.istio.io/inject: 'false'
+               spec:
+                 restartPolicy: Never
+@@ -44,7 +44,7 @@ spec:
+                       - -c
+                       - |
+                         set -eu
+-                        url=http://full-single-service-canary.full-single-service.svc.cluster.local/color
++                        url=http://full-single-service-a-canary.full-single-service.svc.cluster.local/color
+                         expected='"{{args.expected-color}}"'
+                         n=1
+                         while [ "$n" -le 3 ]; do
+diff --git a/full-single-service/kustomization.yaml b/full-single-service/kustomization.yaml
+index 517f3ca..c691a26 100644
+--- a/full-single-service/kustomization.yaml
++++ b/full-single-service/kustomization.yaml
+@@ -4,12 +4,12 @@ resources:
+   - namespace.yaml
+   - ingress-gateway.yaml
+   - gateway.yaml
+-  - route.yaml
++  - route-a.yaml
+   - virtualservice.yaml
+-  - service-stable.yaml
+-  - service-canary.yaml
+-  - analysis-template.yaml
+-  - rollout.yaml
++  - service-a-stable.yaml
++  - service-a-canary.yaml
++  - analysis-template-a.yaml
++  - rollout-a.yaml
+   - route-b.yaml
+   - service-b-stable.yaml
+   - service-b-canary.yaml
+diff --git a/full-single-service/rollout.yaml b/full-single-service/rollout-a.yaml
+similarity index 78%
+rename from full-single-service/rollout.yaml
+rename to full-single-service/rollout-a.yaml
+index 490ae12..779fc58 100644
+--- a/full-single-service/rollout.yaml
++++ b/full-single-service/rollout-a.yaml
+@@ -1,7 +1,7 @@
+ apiVersion: argoproj.io/v1alpha1
+ kind: Rollout
+ metadata:
+-  name: full-single-service
++  name: full-single-service-a
+   namespace: full-single-service
+   annotations:
+     argocd.argoproj.io/sync-wave: '1'
+@@ -10,7 +10,7 @@ spec:
+   revisionHistoryLimit: 3
+   selector:
+     matchLabels:
+-      app: full-single-service
++      app: full-single-service-a
+   template:
+     metadata:
+       annotations:
+@@ -19,8 +19,9 @@ spec:
+         prometheus.io/path: /stats/prometheus
+         prometheus.io/port: '15090'
+       labels:
+-        app: full-single-service
++        app: full-single-service-a
+         app.kubernetes.io/name: rollouts-demo
++        app.kubernetes.io/instance: full-single-service-a
+         sidecar.istio.io/inject: 'true'
+     spec:
+       containers:
+@@ -33,14 +34,12 @@ spec:
+               containerPort: 8080
+               protocol: TCP
+           readinessProbe:
+-            httpGet:
+-              path: /
++            tcpSocket:
+               port: http
+             initialDelaySeconds: 2
+             periodSeconds: 5
+           livenessProbe:
+-            httpGet:
+-              path: /
++            tcpSocket:
+               port: http
+             initialDelaySeconds: 5
+             periodSeconds: 10
+@@ -55,8 +54,8 @@ spec:
+     canary:
+       maxUnavailable: 0
+       maxSurge: 1
+-      stableService: full-single-service-stable
+-      canaryService: full-single-service-canary
++      stableService: full-single-service-a-stable
++      canaryService: full-single-service-a-canary
+       trafficRouting:
+         istio:
+           virtualService:
+@@ -67,35 +66,35 @@ spec:
+         - setWeight: 10
+         - analysis:
+             templates:
+-              - templateName: full-single-service-smoke-test
++              - templateName: full-single-service-a-smoke-test
+             args:
+               - name: expected-color
+                 value: green
+         - setWeight: 25
+         - analysis:
+             templates:
+-              - templateName: full-single-service-smoke-test
++              - templateName: full-single-service-a-smoke-test
+             args:
+               - name: expected-color
+                 value: green
+         - setWeight: 50
+         - analysis:
+             templates:
+-              - templateName: full-single-service-smoke-test
++              - templateName: full-single-service-a-smoke-test
+             args:
+               - name: expected-color
+                 value: green
+         - setWeight: 75
+         - analysis:
+             templates:
+-              - templateName: full-single-service-smoke-test
++              - templateName: full-single-service-a-smoke-test
+             args:
+               - name: expected-color
+                 value: green
+         - setWeight: 100
+         - analysis:
+             templates:
+-              - templateName: full-single-service-smoke-test
++              - templateName: full-single-service-a-smoke-test
+             args:
+               - name: expected-color
+                 value: green
+diff --git a/full-single-service/rollout-b.yaml b/full-single-service/rollout-b.yaml
+index ad6f17f..f50f354 100644
+--- a/full-single-service/rollout-b.yaml
++++ b/full-single-service/rollout-b.yaml
+@@ -34,14 +34,12 @@ spec:
+               containerPort: 8080
+               protocol: TCP
+           readinessProbe:
+-            httpGet:
+-              path: /
++            tcpSocket:
+               port: http
+             initialDelaySeconds: 2
+             periodSeconds: 5
+           livenessProbe:
+-            httpGet:
+-              path: /
++            tcpSocket:
+               port: http
+             initialDelaySeconds: 5
+             periodSeconds: 10
+diff --git a/full-single-service/route.yaml b/full-single-service/route-a.yaml
+similarity index 91%
+rename from full-single-service/route.yaml
+rename to full-single-service/route-a.yaml
+index f98bfd2..b7bb3cb 100644
+--- a/full-single-service/route.yaml
++++ b/full-single-service/route-a.yaml
+@@ -1,7 +1,7 @@
+ apiVersion: route.openshift.io/v1
+ kind: Route
+ metadata:
+-  name: full-single-service
++  name: full-single-service-a
+   namespace: full-single-service
+   annotations:
+     argocd.argoproj.io/sync-wave: '0'
+diff --git a/full-single-service/service-stable.yaml b/full-single-service/service-a-canary.yaml
+similarity index 76%
+rename from full-single-service/service-stable.yaml
+rename to full-single-service/service-a-canary.yaml
+index 68449c7..a932cb3 100644
+--- a/full-single-service/service-stable.yaml
++++ b/full-single-service/service-a-canary.yaml
+@@ -1,13 +1,13 @@
+ apiVersion: v1
+ kind: Service
+ metadata:
+-  name: full-single-service-stable
++  name: full-single-service-a-canary
+   namespace: full-single-service
+   annotations:
+     argocd.argoproj.io/sync-wave: '0'
+ spec:
+   selector:
+-    app: full-single-service
++    app: full-single-service-a
+   ports:
+     - name: http
+       port: 80
+diff --git a/full-single-service/service-canary.yaml b/full-single-service/service-a-stable.yaml
+similarity index 76%
+rename from full-single-service/service-canary.yaml
+rename to full-single-service/service-a-stable.yaml
+index 15ebb1e..d256728 100644
+--- a/full-single-service/service-canary.yaml
++++ b/full-single-service/service-a-stable.yaml
+@@ -1,13 +1,13 @@
+ apiVersion: v1
+ kind: Service
+ metadata:
+-  name: full-single-service-canary
++  name: full-single-service-a-stable
+   namespace: full-single-service
+   annotations:
+     argocd.argoproj.io/sync-wave: '0'
+ spec:
+   selector:
+-    app: full-single-service
++    app: full-single-service-a
+   ports:
+     - name: http
+       port: 80
+diff --git a/full-single-service/virtualservice.yaml b/full-single-service/virtualservice.yaml
+index a94e383..370f14f 100644
+--- a/full-single-service/virtualservice.yaml
++++ b/full-single-service/virtualservice.yaml
+@@ -14,17 +14,17 @@ spec:
+     - name: primary
+       match:
+         - authority:
+-            regex: '^full-single-service-full-single-service\..*$'
++            regex: '^full-single-service-a-full-single-service\..*$'
+           uri:
+             prefix: /
+       route:
+         - destination:
+-            host: full-single-service-stable
++            host: full-single-service-a-stable
+             port:
+               number: 80
+           weight: 100
+         - destination:
+-            host: full-single-service-canary
++            host: full-single-service-a-canary
+             port:
+               number: 80
+           weight: 0
+diff --git a/scripts/full-single-service-spec.py b/scripts/full-single-service-spec.py
+index 31714b7..8ed82c0 100755
+--- a/scripts/full-single-service-spec.py
++++ b/scripts/full-single-service-spec.py
+@@ -10,7 +10,7 @@ import sys
+ 
+ ROOT = Path(__file__).resolve().parent.parent
+ SPECS = {
+-    'a': ROOT / 'full-single-service' / 'rollout.yaml',
++    'a': ROOT / 'full-single-service' / 'rollout-a.yaml',
+     'b': ROOT / 'full-single-service' / 'rollout-b.yaml',
+ }
+ MANIFEST = ROOT / 'argocd' / 'application-full-single-service.yaml'
+@@ -26,8 +26,8 @@ def validate(instance):
+                        (PARTS / 'kustomization.yaml').read_text(), re.M)
+     expected = {
+         'namespace.yaml', 'ingress-gateway.yaml', 'gateway.yaml',
+-        'route.yaml', 'virtualservice.yaml', 'service-stable.yaml',
+-        'service-canary.yaml', 'analysis-template.yaml', 'rollout.yaml',
++        'route-a.yaml', 'virtualservice.yaml', 'service-a-stable.yaml',
++        'service-a-canary.yaml', 'analysis-template-a.yaml', 'rollout-a.yaml',
+         'route-b.yaml', 'service-b-stable.yaml', 'service-b-canary.yaml',
+         'analysis-template-b.yaml', 'rollout-b.yaml',
+         'podmonitor-istio-proxies.yaml',
+@@ -46,7 +46,7 @@ def validate(instance):
+     # No PyYAML requirement: check required route/service ownership as plain text.
+     routing = (PARTS / 'virtualservice.yaml').read_text()
+     for expected_route in ('name: primary', 'name: secondary',
+-                           'host: full-single-service-stable',
++                           'host: full-single-service-a-stable',
+                            'host: full-single-service-b-stable',
+                            'host: full-single-service-b-canary'):
+         if expected_route not in routing:
+diff --git a/scripts/full-single-service.sh b/scripts/full-single-service.sh
+index f6b8c3b..70e7604 100755
+--- a/scripts/full-single-service.sh
++++ b/scripts/full-single-service.sh
+@@ -6,7 +6,7 @@ NS="full-single-service"
+ APP="full-single-service"        # single Argo CD Application owns both Rollouts
+ INSTANCE="${INSTANCE:-a}"
+ case "$INSTANCE" in
+-  a) ROLLOUT="full-single-service"; ROUTE="full-single-service"; ROLLOUT_FILE="full-single-service/rollout.yaml" ;;
++  a) ROLLOUT="full-single-service-a"; ROUTE="full-single-service-a"; ROLLOUT_FILE="full-single-service/rollout-a.yaml" ;;
+   b) ROLLOUT="full-single-service-b"; ROUTE="full-single-service-b"; ROLLOUT_FILE="full-single-service/rollout-b.yaml" ;;
+   *) echo "ERROR: INSTANCE must be a or b" >&2; exit 1 ;;
+ esac

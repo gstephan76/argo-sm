@@ -1,0 +1,762 @@
+diff --git a/argocd/application-full-single-service.yaml b/argocd/application-full-single-service.yaml
+index a25e4c4..d99b740 100644
+--- a/argocd/application-full-single-service.yaml
++++ b/argocd/application-full-single-service.yaml
+@@ -25,12 +25,25 @@ spec:
+       namespace: full-single-service
+       jqPathExpressions:
+         - '.spec.selector."rollouts-pod-template-hash"'
++    - group: ""
++      kind: Service
++      name: full-single-service-b-stable
++      namespace: full-single-service
++      jqPathExpressions:
++        - '.spec.selector."rollouts-pod-template-hash"'
++    - group: ""
++      kind: Service
++      name: full-single-service-b-canary
++      namespace: full-single-service
++      jqPathExpressions:
++        - '.spec.selector."rollouts-pod-template-hash"'
+     - group: networking.istio.io
+       kind: VirtualService
+       name: full-single-service-router
+       namespace: full-single-service
+       jqPathExpressions:
+         - '.spec.http[] | select(.name == "primary") | .route[].weight'
++        - '.spec.http[] | select(.name == "secondary") | .route[].weight'
+   syncPolicy:
+     automated:
+       prune: true
+diff --git a/full-single-service/README.md b/full-single-service/README.md
+index 64bf9d8..ab48e69 100644
+--- a/full-single-service/README.md
++++ b/full-single-service/README.md
+@@ -1,4 +1,4 @@
+-# full-single-service — Istio canary using the Blue/Green demo application
++# full-single-service — two independent Istio canary applications in one namespace
+ 
+ This is **a second, isolated demo** in `gstephan76/argo-sm`. It does not replace
+ `full-demo/`, does not use Bookinfo, and does not modify the old
+@@ -20,10 +20,10 @@ strategy intentionally differs.
+ | --- | --- |
+ | Namespace | `full-single-service` |
+ | Argo CD Application | `full-single-service` in `openshift-gitops` |
+-| Rollout | `full-single-service` (4 replicas) |
+-| Ingress Route | `full-single-service` |
+-| Istio VirtualService | `full-single-service-router`, route `primary` |
+-| Stable/Canary Services | `full-single-service-stable` / `full-single-service-canary` |
++| Rollouts | `full-single-service` (A), `full-single-service-b` (B), 4 replicas each |
++| Ingress Routes | `full-single-service` (A), `full-single-service-b` (B) |
++| Istio VirtualService | `full-single-service-router`, named routes `primary` (A) and `secondary` (B) |
++| Stable/Canary Services | One independent stable/canary Service pair per instance |
+ | Progression | 10% → 25% → 50% → 75% → 100% |
+ | Analysis gates | Job-based HTTP and `/color` check after each weight |
+ | Final gate | Manual Argo Rollouts promotion |
+@@ -32,22 +32,22 @@ strategy intentionally differs.
+ 
+ ```mermaid
+ flowchart TD
+-    Client[Client] --> Route[OpenShift Route: full-single-service]
+-    Route --> Gateway[Namespace-local Istio ingress gateway]
+-    Gateway --> VS[VirtualService: full-single-service-router]
+-    VS -->|100 - weight| Stable[Stable Service]
+-    VS -->|weight| Canary[Canary Service]
+-    Stable --> Blue[BLUE ReplicaSet]
+-    Canary --> Green[GREEN ReplicaSet]
+-    Rollouts[Argo Rollouts controller] -->|adjusts weights| VS
+-    Rollouts -->|changes Service selectors| Stable
+-    Rollouts -->|changes Service selectors| Canary
+-    Rollouts --> Analyses[AnalysisTemplate: check candidate /color]
+-    CD[Argo CD: full-single-service] -->|Git reconciliation| Rollouts
++    Client[Clients] --> RouteA[Route A]
++    Client --> RouteB[Route B]
++    RouteA --> Gateway[Shared namespace-local Istio gateway]
++    RouteB --> Gateway
++    Gateway --> VS[Shared VirtualService: two named routes]
++    VS -->|primary| StableA[A stable/canary Services]
++    VS -->|secondary| StableB[B stable/canary Services]
++    StableA --> RA[Rollout A - BLUE or GREEN]
++    StableB --> RB[Rollout B - BLUE or GREEN]
++    Controller[Argo Rollouts] -->|independent traffic weights| VS
++    CD[One Argo CD Application] --> RA
++    CD --> RB
+ ```
+ 
+ Argo CD ignores **only** the dynamic `rollouts-pod-template-hash` selectors and
+-`primary` HTTP-route destination weights. Everything else remains Git-managed.
++`primary` and `secondary` HTTP-route destination weights. Everything else remains Git-managed.
+ The Istio workload injection and isolated gateway follow the current
+ `full-demo` design. Unlike Bookinfo, there are no details/reviews/ratings
+ services or blackbox/downstream-chain Prometheus analyses: each canary gate
+@@ -78,7 +78,7 @@ bash scripts/full-single-service.sh validate
+ 
+ git add argocd/application-full-single-service.yaml full-single-service \
+         scripts/full-single-service.sh scripts/full-single-service-spec.py
+-git commit -m 'Add single-service Istio canary demo using rollouts-demo'
++git commit -m 'Expand full-single-service to two independent Istio canary Rollouts'
+ git push origin main
+ ```
+ 
+@@ -86,8 +86,9 @@ When you *choose* to deploy this isolated demo to a test cluster:
+ 
+ ```bash
+ bash scripts/full-single-service.sh deploy
+-bash scripts/full-single-service.sh prepare
+-bash scripts/full-single-service.sh start
++INSTANCE=a bash scripts/full-single-service.sh prepare
++INSTANCE=b bash scripts/full-single-service.sh prepare
++INSTANCE=b bash scripts/full-single-service.sh start
+ ```
+ 
+ In another terminal, watch the candidate progress:
+@@ -100,7 +101,7 @@ oc get virtualservice full-single-service-router \
+   -n full-single-service -o yaml
+ ```
+ 
+-Traffic sampling across the single public Route (no special header is needed):
++Traffic sampling across either public Route (no special header is needed):
+ 
+ ```bash
+ REQUESTS=200 bash scripts/full-single-service.sh traffic
+@@ -128,7 +129,7 @@ bash scripts/full-single-service.sh status
+ ## Runtime / Git semantics
+ 
+ - `validate` is **offline** and never contacts a cluster.
+-- `deploy` explicitly creates/reconciles the **new demo's** Application in
++- `deploy` explicitly creates/reconciles the **existing demo's** Application in
+   `openshift-gitops` and waits for Git sync; it does not install Service Mesh.
+ - `prepare` commits and pushes the canonical BLUE manifest, waits for the
+   matching Argo CD revision, then promotes the verified BLUE spec if needed.
+@@ -144,3 +145,77 @@ bash scripts/full-single-service.sh status
+ 
+ No existing `full-demo`, Bookinfo, or `bluegreen-demo` resources are reused or
+ modified; all new resource names and selectors are distinct.
++
++
++## Dual application layout (A and B)
++
++This same demo now contains **two independent Argo Rollouts**, as in the
++`canary-mesh-multi-bookinfo` pattern. Both run `argoproj/rollouts-demo`
++in namespace `full-single-service`; both can progress from BLUE to GREEN
++without changing the other instance. There is **one Argo CD Application**
++(`full-single-service`) owning the whole `full-single-service/` directory.
++
++| | Instance A (existing) | Instance B (new) |
++|---|---|---|
++| Rollout | `full-single-service` | `full-single-service-b` |
++| Route | `full-single-service` | `full-single-service-b` |
++| Stable Service | `full-single-service-stable` | `full-single-service-b-stable` |
++| Canary Service | `full-single-service-canary` | `full-single-service-b-canary` |
++| AnalysisTemplate | `full-single-service-smoke-test` | `full-single-service-b-smoke-test` |
++| Named VirtualService route | `primary` | `secondary` |
++
++The single shared `full-single-service-router` VirtualService distinguishes
++requests by the automatically generated OpenShift Route hostname; each named
++HTTP route owns an isolated stable/canary weight pair. The matching patterns
++assume OpenShift's standard `<route>-<namespace>.<apps-domain>` host naming.
++If you use custom Route hostnames, update the VirtualService authority regexes
++accordingly. Requests made directly to the gateway without either hostname
++are intentionally **not** routed.
++
++To manage the two Rollouts independently:
++
++```bash
++INSTANCE=a bash scripts/full-single-service.sh prepare
++INSTANCE=b bash scripts/full-single-service.sh prepare
++INSTANCE=b bash scripts/full-single-service.sh start
++INSTANCE=b bash scripts/full-single-service.sh promote
++INSTANCE=a bash scripts/full-single-service.sh start
++```
++
++To populate Kiali traffic graphs, run two concurrent traffic loops (from two
++shells) for around 2 minutes, while Kiali graph duration is set to 5–10 minutes:
++
++```bash
++INSTANCE=a REQUESTS=600 TRAFFIC_INTERVAL_SECONDS=0.2 bash scripts/full-single-service.sh traffic
++INSTANCE=b REQUESTS=600 TRAFFIC_INTERVAL_SECONDS=0.2 bash scripts/full-single-service.sh traffic
++```
++
++Run `INSTANCE=a|b bash scripts/full-single-service.sh status` to inspect each.
++Kiali needs actual requests AND Prometheus scraping of Envoy `istio_requests_total`.
++`podmonitor-istio-proxies.yaml` adds the namespace-local PodMonitor following
++`full-demo` conventions, and the namespace-local gateway advertises Envoy
++metrics on port 15090. Ensure OpenShift user-workload monitoring is enabled
++and Kiali is configured to query the Prometheus/Thanos instance containing
++these scraped metrics. The PodMonitor itself does not ensure Kiali uses them.
++
++Read-only diagnostic commands:
++
++```bash
++oc get pod -n full-single-service -o custom-columns='NAME:.metadata.name,CONTAINERS:.spec.containers[*].name'
++oc get podmonitor -n full-single-service
++oc get route -n full-single-service
++oc get virtualservice full-single-service-router -n full-single-service -o yaml
++oc get kiali -A
++```
++
++In OpenShift Observe → Metrics, query:
++
++```promql
++sum by (destination_workload, destination_service_name) (
++  rate(istio_requests_total{destination_workload_namespace="full-single-service"}[2m])
++)
++```
++
++No deployment happens when generating/applying this Git patch. As the Argo CD
++Application is auto-synced, **merging the patch into `main` can trigger a real
++cluster reconciliation**, so review the changes before merging.
+diff --git a/full-single-service/analysis-template-b.yaml b/full-single-service/analysis-template-b.yaml
+new file mode 100644
+index 0000000..c5cbc13
+--- /dev/null
++++ b/full-single-service/analysis-template-b.yaml
+@@ -0,0 +1,56 @@
++apiVersion: argoproj.io/v1alpha1
++kind: AnalysisTemplate
++metadata:
++  name: full-single-service-b-smoke-test
++  namespace: full-single-service
++  annotations:
++    argocd.argoproj.io/sync-wave: '0'
++spec:
++  args:
++    - name: expected-color
++  metrics:
++    - name: candidate-color-and-http
++      count: 1
++      failureLimit: 0
++      provider:
++        job:
++          metadata:
++            labels:
++              app: full-single-service-b-analysis
++          spec:
++            backoffLimit: 0
++            activeDeadlineSeconds: 60
++            template:
++              metadata:
++                labels:
++                  app: full-single-service-b-analysis
++                  sidecar.istio.io/inject: 'false'
++              spec:
++                restartPolicy: Never
++                securityContext:
++                  seccompProfile:
++                    type: RuntimeDefault
++                containers:
++                  - name: smoke-test
++                    image: quay.io/curl/curl:8.22.0
++                    imagePullPolicy: IfNotPresent
++                    securityContext:
++                      allowPrivilegeEscalation: false
++                      capabilities:
++                        drop: [ALL]
++                      runAsNonRoot: true
++                    command:
++                      - /bin/sh
++                      - -c
++                      - |
++                        set -eu
++                        url=http://full-single-service-b-canary.full-single-service.svc.cluster.local/color
++                        expected='"{{args.expected-color}}"'
++                        n=1
++                        while [ "$n" -le 3 ]; do
++                          got="$(curl --fail --silent --show-error --max-time 8 "$url")"
++                          echo "Probe $n: expected=$expected got=$got"
++                          [ "$got" = "$expected" ] || exit 1
++                          n=$((n + 1))
++                          sleep 1
++                        done
+diff --git a/full-single-service/ingress-gateway.yaml b/full-single-service/ingress-gateway.yaml
+index 4d5dd5b..0128558 100644
+--- a/full-single-service/ingress-gateway.yaml
++++ b/full-single-service/ingress-gateway.yaml
+@@ -35,6 +35,9 @@ spec:
+     metadata:
+       annotations:
+         inject.istio.io/templates: gateway
++        prometheus.io/scrape: 'true'
++        prometheus.io/path: /stats/prometheus
++        prometheus.io/port: '15090'
+       labels:
+         istio: ingressgateway
+         app.kubernetes.io/component: full-single-service-ingressgateway
+diff --git a/full-single-service/kustomization.yaml b/full-single-service/kustomization.yaml
+index bf1ddde..517f3ca 100644
+--- a/full-single-service/kustomization.yaml
++++ b/full-single-service/kustomization.yaml
+@@ -10,3 +10,9 @@ resources:
+   - service-canary.yaml
+   - analysis-template.yaml
+   - rollout.yaml
++  - route-b.yaml
++  - service-b-stable.yaml
++  - service-b-canary.yaml
++  - analysis-template-b.yaml
++  - rollout-b.yaml
++  - podmonitor-istio-proxies.yaml
+diff --git a/full-single-service/podmonitor-istio-proxies.yaml b/full-single-service/podmonitor-istio-proxies.yaml
+new file mode 100644
+index 0000000..a434e40
+--- /dev/null
++++ b/full-single-service/podmonitor-istio-proxies.yaml
+@@ -0,0 +1,37 @@
++apiVersion: monitoring.coreos.com/v1
++kind: PodMonitor
++metadata:
++  name: full-single-service-istio-proxies
++  namespace: full-single-service
++  annotations:
++    argocd.argoproj.io/sync-wave: '0'
++spec:
++  selector:
++    matchExpressions:
++      - key: istio-prometheus-ignore
++        operator: DoesNotExist
++  podMetricsEndpoints:
++    - path: /stats/prometheus
++      interval: 5s
++      relabelings:
++        - action: keep
++          sourceLabels: [__meta_kubernetes_pod_container_name]
++          regex: istio-proxy
++        - action: keep
++          sourceLabels: [__meta_kubernetes_pod_annotationpresent_prometheus_io_scrape]
++        - action: replace
++          regex: '(\d+);(([A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4})'
++          replacement: '[$2]:$1'
++          sourceLabels: [__meta_kubernetes_pod_annotation_prometheus_io_port, __meta_kubernetes_pod_ip]
++          targetLabel: __address__
++        - action: replace
++          regex: '(\d+);((([0-9]+?)(\.|$)){4})'
++          replacement: '$2:$1'
++          sourceLabels: [__meta_kubernetes_pod_annotation_prometheus_io_port, __meta_kubernetes_pod_ip]
++          targetLabel: __address__
++        - sourceLabels: [__meta_kubernetes_namespace]
++          action: replace
++          targetLabel: namespace
++        - sourceLabels: [__meta_kubernetes_pod_name]
++          action: replace
++          targetLabel: pod_name
+diff --git a/full-single-service/rollout-b.yaml b/full-single-service/rollout-b.yaml
+new file mode 100644
+index 0000000..96be7b2
+--- /dev/null
++++ b/full-single-service/rollout-b.yaml
+@@ -0,0 +1,103 @@
++apiVersion: argoproj.io/v1alpha1
++kind: Rollout
++metadata:
++  name: full-single-service-b
++  namespace: full-single-service
++  annotations:
++    argocd.argoproj.io/sync-wave: '1'
++spec:
++  replicas: 4
++  revisionHistoryLimit: 3
++  selector:
++    matchLabels:
++      app: full-single-service-b
++  template:
++    metadata:
++      annotations:
++        demo-rollout-revision: baseline-blue
++        prometheus.io/scrape: 'true'
++        prometheus.io/path: /stats/prometheus
++        prometheus.io/port: '15090'
++      labels:
++        app: full-single-service-b
++        app.kubernetes.io/name: rollouts-demo
++        app.kubernetes.io/instance: full-single-service-b
++        sidecar.istio.io/inject: 'true'
++    spec:
++      containers:
++        - name: rollouts-demo
++          # Same single-service application used by old bluegreen-demo.
++          image: argoproj/rollouts-demo:blue
++          imagePullPolicy: Always
++          ports:
++            - name: http
++              containerPort: 8080
++              protocol: TCP
++          readinessProbe:
++            httpGet:
++              path: /
++              port: http
++            initialDelaySeconds: 2
++            periodSeconds: 5
++          livenessProbe:
++            httpGet:
++              path: /
++              port: http
++            initialDelaySeconds: 5
++            periodSeconds: 10
++          resources:
++            requests:
++              cpu: 10m
++              memory: 32Mi
++            limits:
++              cpu: 200m
++              memory: 128Mi
++  strategy:
++    canary:
++      maxUnavailable: 0
++      maxSurge: 1
++      stableService: full-single-service-b-stable
++      canaryService: full-single-service-b-canary
++      trafficRouting:
++        istio:
++          virtualService:
++            name: full-single-service-router
++            routes:
++              - secondary
++      steps:
++        - setWeight: 10
++        - analysis:
++            templates:
++              - templateName: full-single-service-b-smoke-test
++            args:
++              - name: expected-color
++                value: blue
++        - setWeight: 25
++        - analysis:
++            templates:
++              - templateName: full-single-service-b-smoke-test
++            args:
++              - name: expected-color
++                value: blue
++        - setWeight: 50
++        - analysis:
++            templates:
++              - templateName: full-single-service-b-smoke-test
++            args:
++              - name: expected-color
++                value: blue
++        - setWeight: 75
++        - analysis:
++            templates:
++              - templateName: full-single-service-b-smoke-test
++            args:
++              - name: expected-color
++                value: blue
++        - setWeight: 100
++        - analysis:
++            templates:
++              - templateName: full-single-service-b-smoke-test
++            args:
++              - name: expected-color
++                value: blue
++        - pause: {} # operator-controlled final promotion
+diff --git a/full-single-service/route-b.yaml b/full-single-service/route-b.yaml
+new file mode 100644
+index 0000000..324c995
+--- /dev/null
++++ b/full-single-service/route-b.yaml
+@@ -0,0 +1,16 @@
++apiVersion: route.openshift.io/v1
++kind: Route
++metadata:
++  name: full-single-service-b
++  namespace: full-single-service
++  annotations:
++    argocd.argoproj.io/sync-wave: '0'
++spec:
++  to:
++    kind: Service
++    name: full-single-service-ingressgateway
++  port:
++    targetPort: http2
++  tls:
++    termination: edge
++    insecureEdgeTerminationPolicy: Redirect
+diff --git a/full-single-service/service-b-canary.yaml b/full-single-service/service-b-canary.yaml
+new file mode 100644
+index 0000000..de2d17e
+--- /dev/null
++++ b/full-single-service/service-b-canary.yaml
+@@ -0,0 +1,15 @@
++apiVersion: v1
++kind: Service
++metadata:
++  name: full-single-service-b-canary
++  namespace: full-single-service
++  annotations:
++    argocd.argoproj.io/sync-wave: '0'
++spec:
++  selector:
++    app: full-single-service-b
++  ports:
++    - name: http
++      port: 80
++      targetPort: http
++      protocol: TCP
+diff --git a/full-single-service/service-b-stable.yaml b/full-single-service/service-b-stable.yaml
+new file mode 100644
+index 0000000..b580656
+--- /dev/null
++++ b/full-single-service/service-b-stable.yaml
+@@ -0,0 +1,15 @@
++apiVersion: v1
++kind: Service
++metadata:
++  name: full-single-service-b-stable
++  namespace: full-single-service
++  annotations:
++    argocd.argoproj.io/sync-wave: '0'
++spec:
++  selector:
++    app: full-single-service-b
++  ports:
++    - name: http
++      port: 80
++      targetPort: http
++      protocol: TCP
+diff --git a/full-single-service/virtualservice.yaml b/full-single-service/virtualservice.yaml
+index c58f65f..a94e383 100644
+--- a/full-single-service/virtualservice.yaml
++++ b/full-single-service/virtualservice.yaml
+@@ -13,7 +13,9 @@ spec:
+   http:
+     - name: primary
+       match:
+-        - uri:
++        - authority:
++            regex: '^full-single-service-full-single-service\..*$'
++          uri:
+             prefix: /
+       route:
+         - destination:
+@@ -26,3 +28,20 @@ spec:
+             port:
+               number: 80
+           weight: 0
++    - name: secondary
++      match:
++        - authority:
++            regex: '^full-single-service-b-full-single-service\..*$'
++          uri:
++            prefix: /
++      route:
++        - destination:
++            host: full-single-service-b-stable
++            port:
++              number: 80
++          weight: 100
++        - destination:
++            host: full-single-service-b-canary
++            port:
++              number: 80
++          weight: 0
+diff --git a/scripts/full-single-service-spec.py b/scripts/full-single-service-spec.py
+index 9c9dae6..31714b7 100755
+--- a/scripts/full-single-service-spec.py
++++ b/scripts/full-single-service-spec.py
+@@ -9,7 +9,10 @@ import re
+ import sys
+ 
+ ROOT = Path(__file__).resolve().parent.parent
+-SPEC = ROOT / 'full-single-service' / 'rollout.yaml'
++SPECS = {
++    'a': ROOT / 'full-single-service' / 'rollout.yaml',
++    'b': ROOT / 'full-single-service' / 'rollout-b.yaml',
++}
+ MANIFEST = ROOT / 'argocd' / 'application-full-single-service.yaml'
+ PARTS = ROOT / 'full-single-service'
+ 
+@@ -18,11 +21,19 @@ def abort(message):
+     raise SystemExit(f'ERROR: {message}')
+ 
+ 
+-def validate():
++def validate(instance):
+     files = re.findall(r'^  - ([a-z0-9-]+\.yaml)$',
+                        (PARTS / 'kustomization.yaml').read_text(), re.M)
+-    if len(files) != 9 or len(files) != len(set(files)):
+-        abort('Expected 9 unique Kustomize resources')
++    expected = {
++        'namespace.yaml', 'ingress-gateway.yaml', 'gateway.yaml',
++        'route.yaml', 'virtualservice.yaml', 'service-stable.yaml',
++        'service-canary.yaml', 'analysis-template.yaml', 'rollout.yaml',
++        'route-b.yaml', 'service-b-stable.yaml', 'service-b-canary.yaml',
++        'analysis-template-b.yaml', 'rollout-b.yaml',
++        'podmonitor-istio-proxies.yaml',
++    }
++    if set(files) != expected or len(files) != len(expected):
++        abort('Kustomization must reference exactly the shared, A, B, and PodMonitor resources')
+     for name in files:
+         if not (PARTS / name).is_file():
+             abort(f'Missing Kustomize resource: {name}')
+@@ -32,7 +43,15 @@ def validate():
+                      'namespace: full-single-service'):
+         if expected not in app:
+             abort(f'Argo CD Application mismatch: {expected}')
+-    content = SPEC.read_text()
++    # No PyYAML requirement: check required route/service ownership as plain text.
++    routing = (PARTS / 'virtualservice.yaml').read_text()
++    for expected_route in ('name: primary', 'name: secondary',
++                           'host: full-single-service-stable',
++                           'host: full-single-service-b-stable',
++                           'host: full-single-service-b-canary'):
++        if expected_route not in routing:
++            abort('Missing dual routing contract: ' + expected_route)
++    content = SPECS[instance].read_text()
+     colors = re.findall(r'^[ \t]*image: argoproj/rollouts-demo:(blue|green)[ \t]*$', content, re.M)
+     markers = re.findall(r'^\s*demo-rollout-revision: ([^\s]+)\s*$', content, re.M)
+     expectations = re.findall(r'^[ \t]*value: (blue|green)[ \t]*$', content, re.M)
+@@ -59,10 +78,11 @@ def main():
+     parser.add_argument('command', choices=('verify', 'set'))
+     parser.add_argument('--color', choices=('blue', 'green'))
+     parser.add_argument('--marker')
++    parser.add_argument('--instance', choices=('a', 'b'), default='a')
+     args = parser.parse_args()
+-    color, marker = validate()
++    color, marker = validate(args.instance)
+     if args.command == 'verify':
+-        print(f'PASS: self-contained full-single-service manifests ({color}, {marker})')
++        print(f'PASS: full-single-service instance {args.instance} ({color}, {marker})')
+         return
+     if not args.color or not args.marker:
+         abort('set requires --color and --marker')
+@@ -70,7 +90,7 @@ def main():
+         abort('BLUE must use baseline-blue marker')
+     if args.color == 'green' and not re.fullmatch(r'candidate-green-[0-9]{8}T[0-9]{6}Z', args.marker):
+         abort('Invalid candidate-green marker')
+-    content = SPEC.read_text()
++    content = SPECS[args.instance].read_text()
+     content = replace_exact(content,
+                             r'^[ \t]*demo-rollout-revision: [^\n]+$',
+                             f'        demo-rollout-revision: {args.marker}',
+@@ -83,8 +103,8 @@ def main():
+                             r'^[ \t]*value: (blue|green)[ \t]*$',
+                             f'                value: {args.color}',
+                             5, 'analysis colors')
+-    SPEC.write_text(content)
+-    validate()
++    SPECS[args.instance].write_text(content)
++    validate(args.instance)
+     print(f'Set desired Rollout to {args.color} ({args.marker})')
+ 
+ if __name__ == '__main__':
+diff --git a/scripts/full-single-service.sh b/scripts/full-single-service.sh
+index 02a57d3..f6b8c3b 100755
+--- a/scripts/full-single-service.sh
++++ b/scripts/full-single-service.sh
+@@ -3,8 +3,13 @@ set -Eeuo pipefail
+ 
+ # Explicit demo commands only. Never used by the Git-only migration workflow.
+ NS="full-single-service"
+-APP="full-single-service"
+-ROLLOUT="full-single-service"
++APP="full-single-service"        # single Argo CD Application owns both Rollouts
++INSTANCE="${INSTANCE:-a}"
++case "$INSTANCE" in
++  a) ROLLOUT="full-single-service"; ROUTE="full-single-service"; ROLLOUT_FILE="full-single-service/rollout.yaml" ;;
++  b) ROLLOUT="full-single-service-b"; ROUTE="full-single-service-b"; ROLLOUT_FILE="full-single-service/rollout-b.yaml" ;;
++  *) echo "ERROR: INSTANCE must be a or b" >&2; exit 1 ;;
++esac
+ ARGOCD_NS="${ARGOCD_NAMESPACE:-openshift-gitops}"
+ TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-600}"
+ POLL_SECONDS="${POLL_SECONDS:-5}"
+@@ -197,16 +202,16 @@ wait_rollout() {
+ 
+ spec_info() {
+   need python3
+-  python3 scripts/full-single-service-spec.py verify
++  python3 scripts/full-single-service-spec.py verify --instance "$INSTANCE"
+ }
+ 
+ push_desired() {
+   local color="$1" marker="$2"
+-  python3 scripts/full-single-service-spec.py set --color "$color" --marker "$marker"
+-  git add full-single-service/rollout.yaml
++  python3 scripts/full-single-service-spec.py set --instance "$INSTANCE" --color "$color" --marker "$marker"
++  git add "$ROLLOUT_FILE"
+   git diff --cached --check
+   if ! git diff --cached --quiet; then
+-    git commit -m "Set full-single-service ${color} ${marker}"
++    git commit -m "Set full-single-service instance ${INSTANCE} ${color} ${marker}"
+     git push origin main
+   fi
+   git fetch origin main
+@@ -215,7 +220,9 @@ push_desired() {
+ 
+ case "$command" in
+   validate)
+-    spec_info
++    need python3
++    python3 scripts/full-single-service-spec.py verify --instance a
++    python3 scripts/full-single-service-spec.py verify --instance b
+     echo "Offline validation only: no OpenShift operations."
+     ;;
+   deploy)
+@@ -254,10 +261,10 @@ case "$command" in
+     spec_info
+     require_cluster
+     [[ "$(get_app '{.spec.source.repoURL}')" == "$EXPECTED_ORIGIN" ]] || fatal "Run deploy first"
+-    if grep -Eq 'image: argoproj/rollouts-demo:green$' full-single-service/rollout.yaml; then
++    if grep -Eq 'image: argoproj/rollouts-demo:green$' "$ROLLOUT_FILE"; then
+       wait_sync "$(git rev-parse HEAD)"
+       marker="$(get_rollout '{.spec.template.metadata.annotations.demo-rollout-revision}')"
+-      spec_marker="$(python3 -c 'import re,pathlib; print(re.search(r"demo-rollout-revision: ([^\s]+)", pathlib.Path("full-single-service/rollout.yaml").read_text()).group(1))')"
++      spec_marker="$(sed -n -E 's/^[[:space:]]*demo-rollout-revision:[[:space:]]*([^[:space:]]+)[[:space:]]*$/\1/p' "$ROLLOUT_FILE" | head -1)"
+       [[ "$marker" == "$spec_marker" ]] || fatal "Live and Git candidate markers differ"
+       if [[ "$(get_rollout '{.status.phase}')" == Healthy &&
+             "$(get_rollout '{.status.stableRS}')" == "$(get_rollout '{.status.currentPodHash}')" ]]; then
+@@ -284,7 +291,7 @@ case "$command" in
+     require_cluster
+     wait_sync "$(git rev-parse HEAD)"
+     marker="$(get_rollout '{.spec.template.metadata.annotations.demo-rollout-revision}')"
+-    expected_marker="$(python3 -c 'import re,pathlib; print(re.search(r"demo-rollout-revision: ([^\s]+)", pathlib.Path("full-single-service/rollout.yaml").read_text()).group(1))')"
++    expected_marker="$(sed -n -E 's/^[[:space:]]*demo-rollout-revision:[[:space:]]*([^[:space:]]+)[[:space:]]*$/\1/p' "$ROLLOUT_FILE" | head -1)"
+     [[ "$marker" == "$expected_marker" && "$marker" == candidate-green-* ]] || fatal "Candidate marker mismatch"
+     if [[ "$(get_rollout '{.status.phase}')" == Healthy ]]; then
+       wait_rollout promoted "$marker"
+@@ -301,14 +308,17 @@ case "$command" in
+     oc get applications.argoproj.io "$APP" -n "$ARGOCD_NS" -o wide
+     oc argo rollouts get rollout "$ROLLOUT" -n "$NS"
+     oc get virtualservice "$APP-router" -n "$NS" -o yaml
++    oc get podmonitor full-single-service-istio-proxies -n "$NS" -o wide
+     ;;
+   traffic)
+     require_cluster
+     need curl
+     requests="${REQUESTS:-50}"
+     [[ "$requests" =~ ^[1-9][0-9]*$ && "$requests" -le 10000 ]] || fatal "REQUESTS must be 1..10000"
+-    host="$(oc get route "$APP" -n "$NS" -o jsonpath='{.spec.host}')"
++    host="$(oc get route "$ROUTE" -n "$NS" -o jsonpath='{.spec.host}')"
+     [[ -n "$host" ]] || fatal "Route host not found"
++    interval="${TRAFFIC_INTERVAL_SECONDS:-0.2}"
++    [[ "$interval" =~ ^[0-9]+([.][0-9]+)?$ ]] || fatal "Invalid TRAFFIC_INTERVAL_SECONDS"
+     blue=0 green=0 errors=0
+     for ((i=1;i<=requests;i++)); do
+       color="$(curl --silent --show-error --fail --insecure --max-time 10 "https://${host}/color" 2>/dev/null || true)"
+@@ -317,20 +327,25 @@ case "$command" in
+         '"green"') ((green+=1));;
+         *) ((errors+=1));;
+       esac
++      sleep "$interval"
+     done
+-    printf 'Route https://%s/color -> blue=%d green=%d errors=%d of %d\n' "$host" "$blue" "$green" "$errors" "$requests"
++    printf 'Instance %s: Route https://%s/color -> blue=%d green=%d errors=%d of %d\n' "$INSTANCE" "$host" "$blue" "$green" "$errors" "$requests"
+     (( errors == 0 )) || fatal "Some requests failed"
+     ;;
+   help|-h|--help)
+     cat <<'USAGE'
+-Usage: bash scripts/full-single-service.sh COMMAND
++Usage: INSTANCE=a|b bash scripts/full-single-service.sh COMMAND
++
++The default INSTANCE=a operates the original Rollout; INSTANCE=b controls B.
++Both instances are managed by the same Argo CD Application and share a namespace.
+ 
+   validate  Validate new files OFFLINE (no cluster commands)
+   deploy    Apply ONLY this demo's Argo CD Application; show sync progress and diagnostics
+   prepare   Declaratively reset to BLUE and recover trusted baseline
+   start     Commit/push GREEN candidate; wait for 10/25/50/75/100 canary and final pause
+   promote   Manually approve GREEN after the last analysis gate
+-  traffic   Send REQUESTS=50 traffic samples through Route and count colors
++  traffic   Send REQUESTS=50 traffic samples through selected Route and count colors
++            TRAFFIC_INTERVAL_SECONDS=0.2 spaces requests for Kiali visibility
+   status    Show live Application, Rollout, and Istio VirtualService
+ 
+ Set TIMEOUT_SECONDS=180 for a shorter wait; OC_REQUEST_TIMEOUT=12s caps API reads.

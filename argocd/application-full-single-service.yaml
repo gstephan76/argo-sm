@@ -15,13 +15,13 @@ spec:
   ignoreDifferences:
     - group: ""
       kind: Service
-      name: full-single-service-stable
+      name: full-single-service-a-stable
       namespace: full-single-service
       jqPathExpressions:
         - '.spec.selector."rollouts-pod-template-hash"'
     - group: ""
       kind: Service
-      name: full-single-service-canary
+      name: full-single-service-a-canary
       namespace: full-single-service
       jqPathExpressions:
         - '.spec.selector."rollouts-pod-template-hash"'

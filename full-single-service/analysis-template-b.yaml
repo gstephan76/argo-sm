@@ -7,9 +7,9 @@ metadata:
     argocd.argoproj.io/sync-wave: '0'
 spec:
   args:
-    - name: expected-color
+    - name: expected-version
   metrics:
-    - name: candidate-color-and-http
+    - name: candidate-html-and-http
       count: 1
       failureLimit: 0
       provider:
@@ -44,13 +44,18 @@ spec:
                       - -c
                       - |
                         set -eu
-                        url=http://full-single-service-b-canary.full-single-service.svc.cluster.local/color
-                        expected='"{{args.expected-color}}"'
+                        url=http://full-single-service-b-canary.full-single-service.svc.cluster.local/
+                        expected="Revision {{args.expected-version}}"
+                        case "$expected" in
+                          'Revision v1') expected='Revision V1' ;;
+                          'Revision v2') expected='Revision V2' ;;
+                          *) echo 'Unsupported expected revision' >&2; exit 1 ;;
+                        esac
                         n=1
                         while [ "$n" -le 3 ]; do
                           got="$(curl --fail --silent --show-error --max-time 8 "$url")"
-                          echo "Probe $n: expected=$expected got=$got"
-                          [ "$got" = "$expected" ] || exit 1
+                          echo "Probe $n: checking $expected"
+                          printf '%s' "$got" | grep -Fq "$expected" || exit 1
                           n=$((n + 1))
                           sleep 1
                         done

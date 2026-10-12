@@ -1,29 +1,29 @@
 apiVersion: argoproj.io/v1alpha1
 kind: AnalysisTemplate
 metadata:
-  name: full-single-service-smoke-test
+  name: full-single-service-a-smoke-test
   namespace: full-single-service
   annotations:
     argocd.argoproj.io/sync-wave: '0'
 spec:
   args:
-    - name: expected-color
+    - name: expected-version
   metrics:
-    - name: candidate-color-and-http
+    - name: candidate-html-and-http
       count: 1
       failureLimit: 0
       provider:
         job:
           metadata:
             labels:
-              app: full-single-service-analysis
+              app: full-single-service-a-analysis
           spec:
             backoffLimit: 0
             activeDeadlineSeconds: 60
             template:
               metadata:
                 labels:
-                  app: full-single-service-analysis
+                  app: full-single-service-a-analysis
                   sidecar.istio.io/inject: 'false'
               spec:
                 restartPolicy: Never
@@ -44,13 +44,18 @@ spec:
                       - -c
                       - |
                         set -eu
-                        url=http://full-single-service-canary.full-single-service.svc.cluster.local/color
-                        expected='"{{args.expected-color}}"'
+                        url=http://full-single-service-a-canary.full-single-service.svc.cluster.local/
+                        expected="Revision {{args.expected-version}}"
+                        case "$expected" in
+                          'Revision v1') expected='Revision V1' ;;
+                          'Revision v2') expected='Revision V2' ;;
+                          *) echo 'Unsupported expected revision' >&2; exit 1 ;;
+                        esac
                         n=1
                         while [ "$n" -le 3 ]; do
                           got="$(curl --fail --silent --show-error --max-time 8 "$url")"
-                          echo "Probe $n: expected=$expected got=$got"
-                          [ "$got" = "$expected" ] || exit 1
+                          echo "Probe $n: checking $expected"
+                          printf '%s' "$got" | grep -Fq "$expected" || exit 1
                           n=$((n + 1))
                           sleep 1
                         done

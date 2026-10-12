@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: httpd-page-v2
+  namespace: full-single-service
+  annotations:
+    argocd.argoproj.io/sync-wave: '0'
+  labels:
+    app.kubernetes.io/name: httpd-single-page
+    app.kubernetes.io/part-of: full-single-service
+immutable: true
+data:
+  index.html: |
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Service Mesh HTTPD Demo - Revision V2</title>
+        <style>
+          body { background: #052e16; color: white; font-family: system-ui, sans-serif; display: grid; place-items: center; min-height: 100vh; }
+          main { background: #166534; padding: 3rem; border-radius: 1rem; max-width: 700px; }
+        </style>
+      </head>
+      <body>
+        <main>
+          <h1>Revision V2</h1>
+          <p>OpenShift Service Mesh + Argo Rollouts canary using UBI9 HTTPD.</p>
+          <p>This page is delivered by an immutable ConfigMap, using the same HTTPD image as the Knative example.</p>
+        </main>
+      </body>
+    </html>

@@ -1,7 +1,7 @@
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
-  name: full-single-service
+  name: full-single-service-a
   namespace: full-single-service
   annotations:
     argocd.argoproj.io/sync-wave: '0'

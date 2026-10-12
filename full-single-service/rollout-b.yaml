@@ -14,44 +14,54 @@ spec:
   template:
     metadata:
       annotations:
-        demo-rollout-revision: candidate-green-20261012T215144Z
+        demo-rollout-revision: baseline-v1
         prometheus.io/scrape: 'true'
         prometheus.io/path: /stats/prometheus
         prometheus.io/port: '15090'
       labels:
         app: full-single-service-b
-        app.kubernetes.io/name: rollouts-demo
+        app.kubernetes.io/name: httpd-single-page
         app.kubernetes.io/instance: full-single-service-b
         sidecar.istio.io/inject: 'true'
     spec:
       containers:
-        - name: rollouts-demo
-          # Same single-service application used by old bluegreen-demo.
-          image: argoproj/rollouts-demo:green
-          imagePullPolicy: Always
+        - name: httpd
+          # UBI9 HTTPD image from knative/app/service.yaml in argocd-bluegreen.
+          image: registry.access.redhat.com/ubi9/httpd-24:latest
+          imagePullPolicy: IfNotPresent
           ports:
             - name: http
               containerPort: 8080
               protocol: TCP
           readinessProbe:
-            httpGet:
-              path: /
+            tcpSocket:
               port: http
             initialDelaySeconds: 2
             periodSeconds: 5
           livenessProbe:
-            httpGet:
-              path: /
+            tcpSocket:
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10
           resources:
             requests:
-              cpu: 10m
-              memory: 32Mi
+              cpu: 25m
+              memory: 64Mi
             limits:
-              cpu: 200m
-              memory: 128Mi
+              cpu: 500m
+              memory: 256Mi
+          volumeMounts:
+            - name: page
+              mountPath: /var/www/html/index.html
+              subPath: index.html
+              readOnly: true
+      volumes:
+        - name: page
+          configMap:
+            name: httpd-page-v1
+            items:
+              - key: index.html
+                path: index.html
   strategy:
     canary:
       maxUnavailable: 0
@@ -70,34 +80,34 @@ spec:
             templates:
               - templateName: full-single-service-b-smoke-test
             args:
-              - name: expected-color
-                value: green
+              - name: expected-version
+                value: v1
         - setWeight: 25
         - analysis:
             templates:
               - templateName: full-single-service-b-smoke-test
             args:
-              - name: expected-color
-                value: green
+              - name: expected-version
+                value: v1
         - setWeight: 50
         - analysis:
             templates:
               - templateName: full-single-service-b-smoke-test
             args:
-              - name: expected-color
-                value: green
+              - name: expected-version
+                value: v1
         - setWeight: 75
         - analysis:
             templates:
               - templateName: full-single-service-b-smoke-test
             args:
-              - name: expected-color
-                value: green
+              - name: expected-version
+                value: v1
         - setWeight: 100
         - analysis:
             templates:
               - templateName: full-single-service-b-smoke-test
             args:
-              - name: expected-color
-                value: green
+              - name: expected-version
+                value: v1
         - pause: {} # operator-controlled final promotion

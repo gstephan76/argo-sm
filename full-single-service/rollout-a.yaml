@@ -1,0 +1,113 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: full-single-service-a
+  namespace: full-single-service
+  annotations:
+    argocd.argoproj.io/sync-wave: '1'
+spec:
+  replicas: 4
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: full-single-service-a
+  template:
+    metadata:
+      annotations:
+        demo-rollout-revision: baseline-v1
+        prometheus.io/scrape: 'true'
+        prometheus.io/path: /stats/prometheus
+        prometheus.io/port: '15090'
+      labels:
+        app: full-single-service-a
+        app.kubernetes.io/name: httpd-single-page
+        app.kubernetes.io/instance: full-single-service-a
+        sidecar.istio.io/inject: 'true'
+    spec:
+      containers:
+        - name: httpd
+          # UBI9 HTTPD image from knative/app/service.yaml in argocd-bluegreen.
+          image: registry.access.redhat.com/ubi9/httpd-24:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          volumeMounts:
+            - name: page
+              mountPath: /var/www/html/index.html
+              subPath: index.html
+              readOnly: true
+      volumes:
+        - name: page
+          configMap:
+            name: httpd-page-v1
+            items:
+              - key: index.html
+                path: index.html
+  strategy:
+    canary:
+      maxUnavailable: 0
+      maxSurge: 1
+      stableService: full-single-service-a-stable
+      canaryService: full-single-service-a-canary
+      trafficRouting:
+        istio:
+          virtualService:
+            name: full-single-service-router
+            routes:
+              - primary
+      steps:
+        - setWeight: 10
+        - analysis:
+            templates:
+              - templateName: full-single-service-a-smoke-test
+            args:
+              - name: expected-version
+                value: v1
+        - setWeight: 25
+        - analysis:
+            templates:
+              - templateName: full-single-service-a-smoke-test
+            args:
+              - name: expected-version
+                value: v1
+        - setWeight: 50
+        - analysis:
+            templates:
+              - templateName: full-single-service-a-smoke-test
+            args:
+              - name: expected-version
+                value: v1
+        - setWeight: 75
+        - analysis:
+            templates:
+              - templateName: full-single-service-a-smoke-test
+            args:
+              - name: expected-version
+                value: v1
+        - setWeight: 100
+        - analysis:
+            templates:
+              - templateName: full-single-service-a-smoke-test
+            args:
+              - name: expected-version
+                value: v1
+        - pause: {} # operator-controlled final promotion

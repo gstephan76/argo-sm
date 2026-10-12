@@ -14,17 +14,17 @@ spec:
     - name: primary
       match:
         - authority:
-            regex: '^full-single-service-full-single-service\..*$'
+            regex: '^full-single-service-a-full-single-service\..*$'
           uri:
             prefix: /
       route:
         - destination:
-            host: full-single-service-stable
+            host: full-single-service-a-stable
             port:
               number: 80
           weight: 100
         - destination:
-            host: full-single-service-canary
+            host: full-single-service-a-canary
             port:
               number: 80
           weight: 0

@@ -9,7 +9,7 @@ PARTS = ROOT / "full-single-service"
 SPECS = {i: PARTS / f"rollout-{i}.yaml" for i in ("a", "b")}
 MANIFEST = ROOT / "argocd" / "application-full-single-service.yaml"
 FILES = {
-    "namespace.yaml", "ingress-gateway.yaml", "gateway.yaml", "route-a.yaml",
+    "namespace.yaml", "ingress-gateway.yaml", "gateway.yaml", "route.yaml",
     "virtualservice.yaml", "service-a-stable.yaml", "service-a-canary.yaml",
     "service-b-stable.yaml", "service-b-canary.yaml", "analysis-template-a.yaml",
     "analysis-template-b.yaml", "rollout-a.yaml", "rollout-b.yaml", "podmonitor-istio-proxies.yaml",
@@ -36,9 +36,14 @@ def verify(instance):
     for file in FILES:
         if not (PARTS / file).is_file():
             abort("Missing Kustomization resource: " + file)
-    for retired in ("configmap-httpd-v1.yaml", "configmap-httpd-v2.yaml", "configmap-counter-server.yaml", "route-b.yaml"):
+    for retired in ("configmap-httpd-v1.yaml", "configmap-httpd-v2.yaml", "configmap-counter-server.yaml", "route-a.yaml", "route-b.yaml"):
         if (PARTS / retired).exists():
             abort("Retired ConfigMap still tracked: " + retired)
+    public_route = (PARTS / "route.yaml").read_text()
+    if not re.search(r"^metadata:\n  name: full-single-service\n", public_route, re.M):
+        abort("Public Route must have the neutral name full-single-service")
+    if not re.search(r"^    name: full-single-service-ingressgateway$", public_route, re.M):
+        abort("Public Route must target shared ingressgateway")
     app = MANIFEST.read_text()
     for fragment in ("repoURL: https://github.com/gstephan76/argo-sm.git",
                      "path: full-single-service", "namespace: full-single-service"):
@@ -58,7 +63,7 @@ def verify(instance):
         if fragment not in secondary: abort("B header selection missing: " + fragment)
     for fragment in ("uri:", "prefix: /", "host: full-single-service-a-stable", "host: full-single-service-a-canary"):
         if fragment not in primary: abort("A default selection missing: " + fragment)
-    if "x-app-target:" in primary or "x-app-target:" in (PARTS / "route-a.yaml").read_text():
+    if "x-app-target:" in primary or "x-app-target:" in (PARTS / "route.yaml").read_text():
         abort("A default route or OpenShift Route unexpectedly match selection header")
     spec = SPECS[instance].read_text()
     letter = instance.upper()

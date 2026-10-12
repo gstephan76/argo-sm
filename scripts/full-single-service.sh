@@ -6,8 +6,8 @@ NS="full-single-service"
 APP="full-single-service"        # single Argo CD Application owns both Rollouts
 INSTANCE="${INSTANCE:-a}"
 case "$INSTANCE" in
-  a) ROLLOUT="full-single-service-a"; ROUTE="full-single-service-a"; ROLLOUT_FILE="full-single-service/rollout-a.yaml" ;;
-  b) ROLLOUT="full-single-service-b"; ROUTE="full-single-service-a"; ROLLOUT_FILE="full-single-service/rollout-b.yaml" ;;
+  a) ROLLOUT="full-single-service-a"; ROUTE="full-single-service"; ROLLOUT_FILE="full-single-service/rollout-a.yaml" ;;
+  b) ROLLOUT="full-single-service-b"; ROUTE="full-single-service"; ROLLOUT_FILE="full-single-service/rollout-b.yaml" ;;
   *) echo "ERROR: INSTANCE must be a or b" >&2; exit 1 ;;
 esac
 ARGOCD_NS="${ARGOCD_NAMESPACE:-openshift-gitops}"

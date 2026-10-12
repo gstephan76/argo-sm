@@ -46,7 +46,7 @@ ReplicaSet scales down to zero (typically after a short delay).
 |---|---|---|
 | Rollout | `full-single-service-a` | `full-single-service-b` |
 | YAML | `rollout-a.yaml` | `rollout-b.yaml` |
-| OpenShift Route | **One shared Route:** `full-single-service-a` | Access via the same Route and header |
+| OpenShift Route | **One shared Route:** `full-single-service` | Access via the same Route and header |
 | Stable Service | `full-single-service-a-stable` | `full-single-service-b-stable` |
 | Canary Service | `full-single-service-a-canary` | `full-single-service-b-canary` |
 | AnalysisTemplate | `full-single-service-a-smoke-test` | `full-single-service-b-smoke-test` |
@@ -85,11 +85,17 @@ INSTANCE=b SHOW_RESPONSES=1 REQUESTS=40 bash scripts/full-single-service.sh traf
 
 ## One Route with header-based A/B selection
 
-Exactly **one** public OpenShift `Route` exists: `full-single-service-a`.
+Exactly **one** public OpenShift `Route` exists: `full-single-service`.
 Both Rollouts share its gateway and `VirtualService` but retain separate stable
-and canary Service pairs and independent Istio weights. The old public Route
-`full-single-service-b` has been removed from Kustomize and will be pruned by
-Argo CD after this Git change is synchronized.
+and canary Service pairs and independent Istio weights. The old public Routes
+`full-single-service-a` and `full-single-service-b` are superseded by this neutral
+Route. Argo CD should create `Route/full-single-service` and prune the old names
+after the change is synchronized. The generated hostname will change; retrieve
+it from OpenShift rather than hardcoding it.
+
+The Route resource and public hostname are **application-neutral**. Neither
+`Route/full-single-service` nor its service target selects A/B; the Istio
+`VirtualService/full-single-service-router` uses the header to select the backend.
 
 The HTTP header **`x-app-target: b`** sends requests to Application B.
 `x-app-target: a` sends requests to Application A. Without the header,
@@ -101,7 +107,7 @@ Retrieve the single public endpoint and call either application:
 
 ```bash
 NS=full-single-service
-ENTRY_HOST=$(oc get route full-single-service-a -n "$NS" -o jsonpath='{.spec.host}')
+ENTRY_HOST=$(oc get route full-single-service -n "$NS" -o jsonpath='{.spec.host}')
 URL="https://${ENTRY_HOST}/"
 
 # Same public URL, request routed to Application A
@@ -146,9 +152,37 @@ oc get virtualservice full-single-service-router -n full-single-service \
 oc get rollouts.argoproj.io -n full-single-service
 ```
 
-The expected OpenShift Route list has **only `full-single-service-a`**.
+The expected OpenShift Route list has **only `full-single-service`**.
 The VirtualService must retain both named Istio HTTP routes, `secondary`
 followed by `primary` (the A catch-all). Istio matches them in order.
+
+### If header B still reaches A after GitOps sync
+
+Check the *live* VirtualService, not just the declarative Git file. A previously
+reported migration left an old hostname-matching VirtualService in place, which
+caused `x-app-target: b` requests to reach A. Use the read-only check first:
+
+```bash
+bash scripts/reconcile-full-single-service-routing.sh check
+```
+
+Once both Quarkus Rollouts have Ready pods and the GitOps revision is visible,
+apply the guarded routing-only fix if needed:
+
+```bash
+bash scripts/reconcile-full-single-service-routing.sh repair
+```
+
+This action refuses an unknown cluster and unexpected destination layout. It
+uses the VirtualService definition from `origin/main`, **preserves the live A/B
+stable/canary weights**, and updates only the Istio HTTP route order/matches.
+It never deletes Services or Routes. The `oc patch` includes a
+`resourceVersion` test so concurrent controller edits fail safely.
+
+After the repair, verify both responses via the same neutral Route, as shown
+above. If Argo CD immediately overwrites the match rules again, inspect its
+Application status and operation events before repeating the repair.
+
 
 Removing the old HTTPD ConfigMaps from Kustomize means Argo CD may prune them
 when the changes are pushed. This modifies only the `full-single-service` demo;

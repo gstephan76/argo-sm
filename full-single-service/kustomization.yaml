@@ -4,7 +4,7 @@ resources:
   - namespace.yaml
   - ingress-gateway.yaml
   - gateway.yaml
-  - route-a.yaml
+  - route.yaml
   - virtualservice.yaml
   - service-a-stable.yaml
   - service-a-canary.yaml

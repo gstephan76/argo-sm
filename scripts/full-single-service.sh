@@ -8,6 +8,8 @@ ROLLOUT="full-single-service"
 ARGOCD_NS="${ARGOCD_NAMESPACE:-openshift-gitops}"
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-600}"
 POLL_SECONDS="${POLL_SECONDS:-5}"
+OC_REQUEST_TIMEOUT="${OC_REQUEST_TIMEOUT:-12s}"
+OC_WALL_TIMEOUT_SECONDS="${OC_WALL_TIMEOUT_SECONDS:-20}"
 EXPECTED_ORIGIN="https://github.com/gstephan76/argo-sm.git"
 
 fatal() { echo "ERROR: $*" >&2; exit 1; }
@@ -45,28 +47,127 @@ require_cluster() {
     -n istio-cni --timeout=15s >/dev/null || fatal "OSSM IstioCNI/default is not Ready"
 }
 
+# GET operations must not hang indefinitely if the API server/proxy is stuck.
+# These are read-only probes; do not suppress permission or connectivity errors.
+oc_get_bounded() {
+  if command -v timeout >/dev/null 2>&1; then
+    timeout --foreground --signal=TERM "${OC_WALL_TIMEOUT_SECONDS}s" \
+      oc --request-timeout="$OC_REQUEST_TIMEOUT" get "$@"
+  else
+    oc --request-timeout="$OC_REQUEST_TIMEOUT" get "$@"
+  fi
+}
+
 get_rollout() {
-  oc get rollouts.argoproj.io "$ROLLOUT" -n "$NS" -o "jsonpath=$1" 2>/dev/null || true
+  oc_get_bounded rollouts.argoproj.io "$ROLLOUT" -n "$NS" -o "jsonpath=$1" 2>/dev/null || true
 }
 
 get_app() {
-  oc get applications.argoproj.io "$APP" -n "$ARGOCD_NS" -o "jsonpath=$1" 2>/dev/null || true
+  oc_get_bounded applications.argoproj.io "$APP" -n "$ARGOCD_NS" -o "jsonpath=$1" 2>/dev/null || true
+}
+
+# Obtain the entire Application in ONE API request per poll so fields describe
+# the same reconciliation state. Return a unit-separated line of safe strings.
+argocd_snapshot() {
+  local response
+  if ! response="$(oc_get_bounded applications.argoproj.io "$APP" -n "$ARGOCD_NS" -o json 2>&1)"; then
+    echo "ERROR: Unable to read Argo CD Application $ARGOCD_NS/$APP: $response" >&2
+    return 1
+  fi
+  printf '%s' "$response" | python3 -c '
+import json, sys
+try:
+    app = json.load(sys.stdin)
+except (ValueError, TypeError) as exc:
+    sys.exit("Invalid Argo CD Application response: " + str(exc))
+spec = app.get("spec") or {}
+status = app.get("status") or {}
+sync = status.get("sync") or {}
+operation = status.get("operationState") or {}
+health = status.get("health") or {}
+conditions = status.get("conditions") or []
+source = spec.get("source") or {}
+source_repo = source.get("repoURL") or ""
+errors = [c for c in conditions if c.get("type") in (
+    "ComparisonError", "InvalidSpecError", "SyncError", "UnknownError")]
+def clean(value):
+    return str(value or "").replace("\x1f", " ").replace("\n", " ").replace("\r", " ")[:500]
+summary = "; ".join((c.get("type", "?") + ": " + c.get("message", "")) for c in conditions)
+operation_message = operation.get("message") or ""
+print("\x1f".join(map(clean, (
+    source_repo, sync.get("status"), sync.get("revision"),
+    health.get("status"), operation.get("phase"), summary,
+    operation_message, len(errors),
+))))
+'
+}
+
+argocd_diagnostics() {
+  echo "==> Argo CD diagnostics ($ARGOCD_NS/$APP)" >&2
+  # These are read-only calls. Failures are nonfatal during diagnostics.
+  local response
+  if response="$(oc_get_bounded applications.argoproj.io "$APP" -n "$ARGOCD_NS" -o json 2>&1)"; then
+    printf '%s' "$response" | python3 -c '
+import json, sys
+app=json.load(sys.stdin)
+s=app.get("status") or {}
+print("Source:", app.get("spec", {}).get("source", {}))
+print("Sync:", s.get("sync"))
+print("Health:", s.get("health"))
+print("Operation phase:", (s.get("operationState") or {}).get("phase"))
+print("Operation message:", (s.get("operationState") or {}).get("message"))
+for c in s.get("conditions") or []:
+    print("Condition:", c.get("type"), c.get("message"))
+for r in (s.get("operationState") or {}).get("syncResult", {}).get("resources") or []:
+    print("Sync resource:", r.get("kind"), r.get("namespace"), r.get("name"),
+          r.get("status"), r.get("message"))
+for r in s.get("resources") or []:
+    if r.get("status") != "Synced" or r.get("health", {}).get("status") not in (None, "Healthy"):
+        print("Resource issue:", r.get("kind"), r.get("namespace"), r.get("name"),
+              r.get("status"), r.get("health"))
+' >&2 || true
+  else
+    printf 'Application query failed: %s\n' "$response" >&2
+  fi
+  echo "==> Namespace workloads (read-only)" >&2
+  oc_get_bounded pods,deployments,rollouts.argoproj.io -n "$NS" -o wide >&2 || true
+  echo "==> Inspect Argo CD app: oc -n $ARGOCD_NS describe applications.argoproj.io $APP" >&2
 }
 
 wait_sync() {
-  local revision="$1" sync got op repo end=$((SECONDS + TIMEOUT_SECONDS))
-  echo "==> Waiting for Argo CD to reconcile ${revision:0:12}"
+  local revision="$1" snapshot repo sync got health op conditions message error_count
+  local end=$((SECONDS + TIMEOUT_SECONDS)) last_state='' state elapsed
+  echo "==> Waiting for Argo CD to reconcile ${revision:0:12} (timeout=${TIMEOUT_SECONDS}s; polling=${POLL_SECONDS}s)"
   while (( SECONDS < end )); do
-    repo="$(get_app '{.spec.source.repoURL}')"
-    [[ "$repo" == "$EXPECTED_ORIGIN" ]] || fatal "Argo CD Application repoURL is ${repo:-missing}"
-    sync="$(get_app '{.status.sync.status}')"
-    got="$(get_app '{.status.sync.revision}')"
-    op="$(get_app '{.status.operationState.phase}')"
-    [[ "$op" != Failed && "$op" != Error ]] || fatal "Argo CD operation failed"
-    [[ "$sync" == Synced && "$got" == "$revision" ]] && return 0
+    if ! snapshot="$(argocd_snapshot)"; then
+      argocd_diagnostics
+      fatal "Cannot read Argo CD sync status; check the API connection and RBAC"
+    fi
+    IFS=$'\x1f' read -r repo sync got health op conditions message error_count <<< "$snapshot"
+    [[ "$repo" == "$EXPECTED_ORIGIN" ]] || {
+      argocd_diagnostics
+      fatal "Argo CD Application repoURL is ${repo:-missing}, expected $EXPECTED_ORIGIN"
+    }
+    elapsed=$(( TIMEOUT_SECONDS - (end - SECONDS) ))
+    state="sync=${sync:-unknown} health=${health:-unknown} revision=${got:0:12} operation=${op:-none}"
+    if [[ "$state" != "$last_state" || $((elapsed % 15)) -lt POLL_SECONDS ]]; then
+      printf '    [%ss] %s\n' "$elapsed" "$state"
+      [[ -z "$conditions" ]] || printf '    conditions: %.500s\n' "$conditions"
+      [[ -z "$message" ]] || printf '    operation message: %.500s\n' "$message"
+      last_state="$state"
+    fi
+    if [[ "$op" == Failed || "$op" == Error || "${error_count:-0}" != 0 ]]; then
+      argocd_diagnostics
+      fatal "Argo CD reconciliation failed; see Application conditions and sync resources above"
+    fi
+    if [[ "$sync" == Synced && "$got" == "$revision" ]]; then
+      printf 'PASS: Argo CD synchronized requested Git revision %s (health=%s)\n' "${revision:0:12}" "${health:-unknown}"
+      return 0
+    fi
     sleep "$POLL_SECONDS"
   done
-  fatal "Argo CD did not sync ${revision:0:12} within ${TIMEOUT_SECONDS}s"
+  argocd_diagnostics
+  fatal "Argo CD did not sync ${revision:0:12} within ${TIMEOUT_SECONDS}s; see conditions above"
 }
 
 wait_rollout() {
@@ -122,6 +223,8 @@ case "$command" in
     spec_info
     require_cluster
     oc apply -f argocd/application-full-single-service.yaml
+    # Request a fresh comparison for newly created/reconfigured Applications.
+    oc annotate applications.argoproj.io "$APP" -n "$ARGOCD_NS"       argocd.argoproj.io/refresh=hard --overwrite >/dev/null
     wait_sync "$(git rev-parse HEAD)"
     echo "Manifest reconciled. Run: bash scripts/full-single-service.sh prepare"
     ;;
@@ -223,13 +326,14 @@ case "$command" in
 Usage: bash scripts/full-single-service.sh COMMAND
 
   validate  Validate new files OFFLINE (no cluster commands)
-  deploy    Apply ONLY this demo's Argo CD Application; wait for sync
+  deploy    Apply ONLY this demo's Argo CD Application; show sync progress and diagnostics
   prepare   Declaratively reset to BLUE and recover trusted baseline
   start     Commit/push GREEN candidate; wait for 10/25/50/75/100 canary and final pause
   promote   Manually approve GREEN after the last analysis gate
   traffic   Send REQUESTS=50 traffic samples through Route and count colors
   status    Show live Application, Rollout, and Istio VirtualService
 
+Set TIMEOUT_SECONDS=180 for a shorter wait; OC_REQUEST_TIMEOUT=12s caps API reads.
 Commands other than validate/help intentionally communicate with OpenShift.
 The Git-only MIGRATION scripts are completely independent of this demo.
 USAGE

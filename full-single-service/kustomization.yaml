@@ -10,3 +10,9 @@ resources:
   - service-canary.yaml
   - analysis-template.yaml
   - rollout.yaml
+  - route-b.yaml
+  - service-b-stable.yaml
+  - service-b-canary.yaml
+  - analysis-template-b.yaml
+  - rollout-b.yaml
+  - podmonitor-istio-proxies.yaml

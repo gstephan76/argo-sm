@@ -13,7 +13,9 @@ spec:
   http:
     - name: primary
       match:
-        - uri:
+        - authority:
+            regex: '^full-single-service-full-single-service\..*$'
+          uri:
             prefix: /
       route:
         - destination:
@@ -23,6 +25,23 @@ spec:
           weight: 100
         - destination:
             host: full-single-service-canary
+            port:
+              number: 80
+          weight: 0
+    - name: secondary
+      match:
+        - authority:
+            regex: '^full-single-service-b-full-single-service\..*$'
+          uri:
+            prefix: /
+      route:
+        - destination:
+            host: full-single-service-b-stable
+            port:
+              number: 80
+          weight: 100
+        - destination:
+            host: full-single-service-b-canary
             port:
               number: 80
           weight: 0

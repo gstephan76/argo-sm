@@ -3,8 +3,13 @@ set -Eeuo pipefail
 
 # Explicit demo commands only. Never used by the Git-only migration workflow.
 NS="full-single-service"
-APP="full-single-service"
-ROLLOUT="full-single-service"
+APP="full-single-service"        # single Argo CD Application owns both Rollouts
+INSTANCE="${INSTANCE:-a}"
+case "$INSTANCE" in
+  a) ROLLOUT="full-single-service"; ROUTE="full-single-service"; ROLLOUT_FILE="full-single-service/rollout.yaml" ;;
+  b) ROLLOUT="full-single-service-b"; ROUTE="full-single-service-b"; ROLLOUT_FILE="full-single-service/rollout-b.yaml" ;;
+  *) echo "ERROR: INSTANCE must be a or b" >&2; exit 1 ;;
+esac
 ARGOCD_NS="${ARGOCD_NAMESPACE:-openshift-gitops}"
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-600}"
 POLL_SECONDS="${POLL_SECONDS:-5}"
@@ -197,16 +202,16 @@ wait_rollout() {
 
 spec_info() {
   need python3
-  python3 scripts/full-single-service-spec.py verify
+  python3 scripts/full-single-service-spec.py verify --instance "$INSTANCE"
 }
 
 push_desired() {
   local color="$1" marker="$2"
-  python3 scripts/full-single-service-spec.py set --color "$color" --marker "$marker"
-  git add full-single-service/rollout.yaml
+  python3 scripts/full-single-service-spec.py set --instance "$INSTANCE" --color "$color" --marker "$marker"
+  git add "$ROLLOUT_FILE"
   git diff --cached --check
   if ! git diff --cached --quiet; then
-    git commit -m "Set full-single-service ${color} ${marker}"
+    git commit -m "Set full-single-service instance ${INSTANCE} ${color} ${marker}"
     git push origin main
   fi
   git fetch origin main
@@ -215,7 +220,9 @@ push_desired() {
 
 case "$command" in
   validate)
-    spec_info
+    need python3
+    python3 scripts/full-single-service-spec.py verify --instance a
+    python3 scripts/full-single-service-spec.py verify --instance b
     echo "Offline validation only: no OpenShift operations."
     ;;
   deploy)
@@ -254,10 +261,10 @@ case "$command" in
     spec_info
     require_cluster
     [[ "$(get_app '{.spec.source.repoURL}')" == "$EXPECTED_ORIGIN" ]] || fatal "Run deploy first"
-    if grep -Eq 'image: argoproj/rollouts-demo:green$' full-single-service/rollout.yaml; then
+    if grep -Eq 'image: argoproj/rollouts-demo:green$' "$ROLLOUT_FILE"; then
       wait_sync "$(git rev-parse HEAD)"
       marker="$(get_rollout '{.spec.template.metadata.annotations.demo-rollout-revision}')"
-      spec_marker="$(python3 -c 'import re,pathlib; print(re.search(r"demo-rollout-revision: ([^\s]+)", pathlib.Path("full-single-service/rollout.yaml").read_text()).group(1))')"
+      spec_marker="$(sed -n -E 's/^[[:space:]]*demo-rollout-revision:[[:space:]]*([^[:space:]]+)[[:space:]]*$/\1/p' "$ROLLOUT_FILE" | head -1)"
       [[ "$marker" == "$spec_marker" ]] || fatal "Live and Git candidate markers differ"
       if [[ "$(get_rollout '{.status.phase}')" == Healthy &&
             "$(get_rollout '{.status.stableRS}')" == "$(get_rollout '{.status.currentPodHash}')" ]]; then
@@ -284,7 +291,7 @@ case "$command" in
     require_cluster
     wait_sync "$(git rev-parse HEAD)"
     marker="$(get_rollout '{.spec.template.metadata.annotations.demo-rollout-revision}')"
-    expected_marker="$(python3 -c 'import re,pathlib; print(re.search(r"demo-rollout-revision: ([^\s]+)", pathlib.Path("full-single-service/rollout.yaml").read_text()).group(1))')"
+    expected_marker="$(sed -n -E 's/^[[:space:]]*demo-rollout-revision:[[:space:]]*([^[:space:]]+)[[:space:]]*$/\1/p' "$ROLLOUT_FILE" | head -1)"
     [[ "$marker" == "$expected_marker" && "$marker" == candidate-green-* ]] || fatal "Candidate marker mismatch"
     if [[ "$(get_rollout '{.status.phase}')" == Healthy ]]; then
       wait_rollout promoted "$marker"
@@ -301,14 +308,17 @@ case "$command" in
     oc get applications.argoproj.io "$APP" -n "$ARGOCD_NS" -o wide
     oc argo rollouts get rollout "$ROLLOUT" -n "$NS"
     oc get virtualservice "$APP-router" -n "$NS" -o yaml
+    oc get podmonitor full-single-service-istio-proxies -n "$NS" -o wide
     ;;
   traffic)
     require_cluster
     need curl
     requests="${REQUESTS:-50}"
     [[ "$requests" =~ ^[1-9][0-9]*$ && "$requests" -le 10000 ]] || fatal "REQUESTS must be 1..10000"
-    host="$(oc get route "$APP" -n "$NS" -o jsonpath='{.spec.host}')"
+    host="$(oc get route "$ROUTE" -n "$NS" -o jsonpath='{.spec.host}')"
     [[ -n "$host" ]] || fatal "Route host not found"
+    interval="${TRAFFIC_INTERVAL_SECONDS:-0.2}"
+    [[ "$interval" =~ ^[0-9]+([.][0-9]+)?$ ]] || fatal "Invalid TRAFFIC_INTERVAL_SECONDS"
     blue=0 green=0 errors=0
     for ((i=1;i<=requests;i++)); do
       color="$(curl --silent --show-error --fail --insecure --max-time 10 "https://${host}/color" 2>/dev/null || true)"
@@ -317,20 +327,25 @@ case "$command" in
         '"green"') ((green+=1));;
         *) ((errors+=1));;
       esac
+      sleep "$interval"
     done
-    printf 'Route https://%s/color -> blue=%d green=%d errors=%d of %d\n' "$host" "$blue" "$green" "$errors" "$requests"
+    printf 'Instance %s: Route https://%s/color -> blue=%d green=%d errors=%d of %d\n' "$INSTANCE" "$host" "$blue" "$green" "$errors" "$requests"
     (( errors == 0 )) || fatal "Some requests failed"
     ;;
   help|-h|--help)
     cat <<'USAGE'
-Usage: bash scripts/full-single-service.sh COMMAND
+Usage: INSTANCE=a|b bash scripts/full-single-service.sh COMMAND
+
+The default INSTANCE=a operates the original Rollout; INSTANCE=b controls B.
+Both instances are managed by the same Argo CD Application and share a namespace.
 
   validate  Validate new files OFFLINE (no cluster commands)
   deploy    Apply ONLY this demo's Argo CD Application; show sync progress and diagnostics
   prepare   Declaratively reset to BLUE and recover trusted baseline
   start     Commit/push GREEN candidate; wait for 10/25/50/75/100 canary and final pause
   promote   Manually approve GREEN after the last analysis gate
-  traffic   Send REQUESTS=50 traffic samples through Route and count colors
+  traffic   Send REQUESTS=50 traffic samples through selected Route and count colors
+            TRAFFIC_INTERVAL_SECONDS=0.2 spaces requests for Kiali visibility
   status    Show live Application, Rollout, and Istio VirtualService
 
 Set TIMEOUT_SECONDS=180 for a shorter wait; OC_REQUEST_TIMEOUT=12s caps API reads.

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: full-single-service-b-stable
+  namespace: full-single-service
+  annotations:
+    argocd.argoproj.io/sync-wave: '0'
+spec:
+  selector:
+    app: full-single-service-b
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP

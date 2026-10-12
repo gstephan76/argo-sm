@@ -81,7 +81,7 @@ jq -n --slurpfile live "$TMP/live.json" --slurpfile desired "$TMP/desired.json" 
       if ($old.route | length)!=2 or ($wanted.route | length)!=2 or
          ([$old.route[].destination.host] != [$wanted.route[].destination.host]) or
          (($old.route[0].weight + $old.route[1].weight)!=100) or
-         (($old.route[].weight | type) != "number")
+         any($old.route[]; (.weight | type) != "number")
       then error("Refusing repair: live Rollouts route destination or weight drift")
       else ($wanted |
         .route[0].weight = $old.route[0].weight |

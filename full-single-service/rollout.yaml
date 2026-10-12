@@ -14,7 +14,7 @@ spec:
   template:
     metadata:
       annotations:
-        demo-rollout-revision: baseline-blue
+        demo-rollout-revision: candidate-green-20261012T221439Z
         prometheus.io/scrape: 'true'
         prometheus.io/path: /stats/prometheus
         prometheus.io/port: '15090'
@@ -26,7 +26,7 @@ spec:
       containers:
         - name: rollouts-demo
           # Same single-service application used by old bluegreen-demo.
-          image: argoproj/rollouts-demo:blue
+          image: argoproj/rollouts-demo:green
           imagePullPolicy: Always
           ports:
             - name: http
@@ -70,33 +70,33 @@ spec:
               - templateName: full-single-service-smoke-test
             args:
               - name: expected-color
-                value: blue
+                value: green
         - setWeight: 25
         - analysis:
             templates:
               - templateName: full-single-service-smoke-test
             args:
               - name: expected-color
-                value: blue
+                value: green
         - setWeight: 50
         - analysis:
             templates:
               - templateName: full-single-service-smoke-test
             args:
               - name: expected-color
-                value: blue
+                value: green
         - setWeight: 75
         - analysis:
             templates:
               - templateName: full-single-service-smoke-test
             args:
               - name: expected-color
-                value: blue
+                value: green
         - setWeight: 100
         - analysis:
             templates:
               - templateName: full-single-service-smoke-test
             args:
               - name: expected-color
-                value: blue
+                value: green
         - pause: {} # operator-controlled final promotion

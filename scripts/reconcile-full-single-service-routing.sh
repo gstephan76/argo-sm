@@ -68,8 +68,16 @@ jq -n --slurpfile live "$TMP/live.json" --slurpfile desired "$TMP/desired.json" 
       $d.metadata.name != "full-single-service-router" or
       $l.metadata.namespace != "full-single-service" or
       $d.metadata.namespace != "full-single-service" or
-      ($l.spec.http | length) != 2 or ($d.spec.http | length) != 2 or
-      ([$l.spec.http[].name] | sort) != ["primary", "secondary"] or
+      ($d.spec.http | length) != 2 or
+      # Permit the normal two-route state OR the known duplicated route state.
+      # Duplicates must be byte-for-byte equal so no traffic settings are lost.
+      (if ($l.spec.http | length) == 2 then
+         ([$l.spec.http[].name] | sort) != ["primary", "secondary"]
+       elif ($l.spec.http | length) == 4 then
+         ([$l.spec.http[].name] != ["secondary", "secondary", "primary", "primary"] or
+          $l.spec.http[0] != $l.spec.http[1] or
+          $l.spec.http[2] != $l.spec.http[3])
+       else true end) or
       [$d.spec.http[].name] != ["secondary", "primary"] or
       $d.spec.http[0].match[0].headers."x-app-target".exact != "b" or
       $d.spec.http[1].match[0].uri.prefix != "/")
@@ -88,7 +96,9 @@ jq -n --slurpfile live "$TMP/live.json" --slurpfile desired "$TMP/desired.json" 
         .route[1].weight = $old.route[1].weight)
       end
     )) as $next |
-    if $l.spec.http == $next then []
+    if ([$next[].name] != ["secondary", "primary"] or ($next | length) != 2)
+    then error("Refusing repair: proposed VirtualService must contain exactly two ordered routes")
+    elif $l.spec.http == $next then []
     else [
       {op:"test",path:"/metadata/resourceVersion",value:$l.metadata.resourceVersion},
       {op:"replace",path:"/spec/http",value:$next}

@@ -83,6 +83,43 @@ INSTANCE=a SHOW_RESPONSES=1 REQUESTS=40 bash scripts/full-single-service.sh traf
 INSTANCE=b SHOW_RESPONSES=1 REQUESTS=40 bash scripts/full-single-service.sh traffic
 ```
 
+## Watch VirtualService weights and Rollouts
+
+Open separate terminals while running `start` or `promote`. Both applications
+share the public Route and Istio VirtualService, but have **independent**
+stable/canary weights. The named Istio HTTP route `secondary` is Application B;
+`primary` is Application A. In each route, destination 0 is the stable Service
+and destination 1 is the canary Service.
+
+**Terminal 1 — watch live Istio stable/canary weights (every 2 seconds):**
+
+```bash
+# Columns: HTTP route | stable weight (%) | canary weight (%)
+watch -n 2 -d -- 'oc get virtualservice full-single-service-router -n full-single-service -o json | jq -r ".spec.http[] | [.name, .route[0].weight, .route[1].weight] | @tsv"'
+```
+
+**Terminal 2 — watch both Rollouts (desired/current/updated/available replicas):**
+
+```bash
+watch -n 2 -d -- 'oc get rollouts.argoproj.io -n full-single-service'
+```
+
+**Optional terminals — detailed steps, pauses, and AnalysisRun results:**
+
+```bash
+# Application A (run in its own terminal)
+oc argo rollouts get rollout full-single-service-a -n full-single-service --watch
+
+# Application B (run in a separate terminal)
+oc argo rollouts get rollout full-single-service-b -n full-single-service --watch
+```
+
+Press Ctrl+C to stop a watch. At the final manual pause (step 10/11), canary
+traffic can be 100% while both the old stable and new candidate pods are still
+running. After promotion, the candidate becomes stable and the old ReplicaSet
+scales down; the corresponding Istio route normally returns to 100% stable /
+0% canary. These weights are managed by Argo Rollouts, not by the public Route.
+
 ## One Route with header-based A/B selection
 
 Exactly **one** public OpenShift `Route` exists: `full-single-service`.

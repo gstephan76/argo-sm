@@ -90,6 +90,8 @@ def verify(instance):
     if color == "YELLOW" and not re.fullmatch(r'candidate-yellow-[0-9]{8}T[0-9]{6}Z', marker):
         abort("YELLOW marker must be timestamped")
     analysis = (PARTS / f"analysis-template-{instance}.yaml").read_text()
+    if analysis.count('while [ "$n" -le 15 ]; do') != 1 or analysis.count("sleep 1") != 1:
+        abort(f"AnalysisTemplate {instance} must perform 15 probes with one-second spacing")
     for fragment in ("name: expected-color", f"Application {letter}",
                      "candidate-greeting-and-counter", "[0-9]+$"):
         if fragment not in analysis:

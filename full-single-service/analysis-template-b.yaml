@@ -51,7 +51,7 @@ spec:
                           *) echo 'Unsupported expected color' >&2; exit 1 ;;
                         esac
                         n=1
-                        while [ "$n" -le 3 ]; do
+                        while [ "$n" -le 15 ]; do
                           got="$(curl --fail --silent --show-error --max-time 8 "$url")"
                           # Prefix identifies this application and the selected color.
                           # Last colon-separated number is the greeter's per-pod counter.

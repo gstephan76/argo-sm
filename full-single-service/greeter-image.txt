@@ -1,0 +1,1 @@
+ghcr.io/gstephan76/argo-sm-greeter:configmap-v1

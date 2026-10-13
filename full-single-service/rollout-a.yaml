@@ -20,18 +20,23 @@ spec:
         prometheus.io/port: '15090'
       labels:
         app: full-single-service-a
-        app.kubernetes.io/name: knative-tutorial-greeter
+        app.kubernetes.io/name: argo-sm-greeter
         app.kubernetes.io/instance: full-single-service-a
         sidecar.istio.io/inject: 'true'
     spec:
       containers:
         - name: greeter
           # Quarkus Knative tutorial greeter: per-pod request count included.
-          image: quay.io/rhdevelopers/knative-tutorial-greeter:quarkus
+          image: ghcr.io/gstephan76/argo-sm-greeter:configmap-v1
           imagePullPolicy: IfNotPresent
           env:
             - name: MESSAGE_PREFIX
               value: "Application A - BLUE"
+            - name: GREETER_INSTANCE_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: full-single-service-a-identity
+                  key: GREETER_INSTANCE_ID
           ports:
             - name: http
               containerPort: 8080

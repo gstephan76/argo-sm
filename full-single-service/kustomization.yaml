@@ -6,10 +6,12 @@ resources:
   - gateway.yaml
   - route.yaml
   - virtualservice.yaml
+  - configmap-a-identity.yaml
   - service-a-stable.yaml
   - service-a-canary.yaml
   - analysis-template-a.yaml
   - rollout-a.yaml
+  - configmap-b-identity.yaml
   - service-b-stable.yaml
   - service-b-canary.yaml
   - analysis-template-b.yaml

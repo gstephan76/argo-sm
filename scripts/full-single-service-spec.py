@@ -11,10 +11,10 @@ MANIFEST = ROOT / "argocd" / "application-full-single-service.yaml"
 FILES = {
     "namespace.yaml", "ingress-gateway.yaml", "gateway.yaml", "route.yaml",
     "virtualservice.yaml", "service-a-stable.yaml", "service-a-canary.yaml",
-    "service-b-stable.yaml", "service-b-canary.yaml", "analysis-template-a.yaml",
+    "service-b-stable.yaml", "service-b-canary.yaml", "configmap-a-identity.yaml", "configmap-b-identity.yaml", "analysis-template-a.yaml",
     "analysis-template-b.yaml", "rollout-a.yaml", "rollout-b.yaml", "podmonitor-istio-proxies.yaml",
 }
-IMAGE = "quay.io/rhdevelopers/knative-tutorial-greeter:quarkus"
+IMAGE = (PARTS / "greeter-image.txt").read_text(encoding="utf-8").strip()
 
 
 def abort(msg):
@@ -65,10 +65,17 @@ def verify(instance):
         if fragment not in primary: abort("A default selection missing: " + fragment)
     if "x-app-target:" in primary or "x-app-target:" in (PARTS / "route.yaml").read_text():
         abort("A default route or OpenShift Route unexpectedly match selection header")
+    identity = (PARTS / f"configmap-{instance}-identity.yaml").read_text()
+    if not re.search(r"^  GREETER_INSTANCE_ID: '[A-Za-z0-9_.-]{1,64}'$", identity, re.M):
+        abort(f"Invalid identity ConfigMap for {instance}")
+    if f"name: full-single-service-{instance}-identity" not in identity:
+        abort(f"Incorrect identity ConfigMap name for {instance}")
+    if f"name: full-single-service-{instance}-identity" not in (PARTS / f"analysis-template-{instance}.yaml").read_text():
+        abort(f"Analysis Job must verify identity for {instance}")
     spec = SPECS[instance].read_text()
     letter = instance.upper()
     for fragment in (f"name: full-single-service-{instance}\n", "  replicas: 1\n",
-                     f"image: {IMAGE}", "name: MESSAGE_PREFIX",
+                     f"image: {IMAGE}", "name: MESSAGE_PREFIX", "name: GREETER_INSTANCE_ID", "configMapKeyRef:",
                      "tcpSocket:", "maxSurge: 1", "maxUnavailable: 0"):
         if fragment not in spec: abort(f"Missing {instance} Rollout contract: {fragment}")
     if spec.count("tcpSocket:") != 2 or "httpGet:" in spec or "volumeMounts:" in spec:

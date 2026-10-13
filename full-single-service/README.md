@@ -1,36 +1,60 @@
 # full-single-service — Application A/B BLUE → YELLOW Istio canaries
 
 This is an Argo CD + Argo Rollouts + OpenShift Service Mesh demo in namespace
-`full-single-service`, **not a Knative Service**. Both Rollouts deploy the same
-prebuilt Quarkus greeter used in the Knative tutorial:
+`full-single-service`, **not a Knative Service**. Both Rollouts reference
+the **same container image**, defined in `greeter-image.txt`. The greeter is
+built from `greeter/` and implements the original plain-text greeter format.
 
-`quay.io/rhdevelopers/knative-tutorial-greeter:quarkus`
-
-The greeter supports a `MESSAGE_PREFIX` environment variable and already returns
-a pod-local, incrementing request count. No custom counter server, image build,
-HTML page, or ConfigMap volume is needed.
+The response identifier is loaded at process startup from `GREETER_INSTANCE_ID`,
+supplied by `configmap-a-identity.yaml` or `configmap-b-identity.yaml`. The
+BLUE/YELLOW prefix remains controlled by each Rollout's `MESSAGE_PREFIX`, and
+each pod retains its own incrementing request counter. The image contains
+no A/B-specific identity.
 
 ## Responses
 
 `GET /` responds with one plain-text line like:
 
 ```text
-Application A - BLUE greeter => 'pod-a-blue' : 1
-Application A - BLUE greeter => 'pod-a-blue' : 2
-Application B - YELLOW greeter => 'pod-b-yellow' : 1
+Application A - BLUE greeter => 'greeter-a-8f1c4e' : 1
+Application A - BLUE greeter => 'greeter-a-8f1c4e' : 2
+Application B - YELLOW greeter => 'greeter-b-3d7a92' : 1
 ```
 
-Exact whitespace and hostname formatting are owned by the upstream greeter. The
-`Application X - COLOR` prefix is supplied through `MESSAGE_PREFIX`. The count
-is maintained per pod: it resets if that pod is replaced and may jump from the
-point of view of a client when Istio routes requests between BLUE/YELLOW pods.
-Canary AnalysisJobs and any other HTTP callers also increment the counter.
+The identifier comes from the app-specific ConfigMap and stays constant across
+pod restarts. The `Application X - COLOR` prefix comes from `MESSAGE_PREFIX`.
+The counter is maintained per pod; count values can vary when traffic is routed
+between stable and candidate versions. Canary AnalysisJobs also increment it.
 
 Readiness and liveness probes use TCP on port 8080, avoiding HTTP health-check
 requests being included in traffic counts. The greeter does not make downstream
 calls, so Kiali will mainly show traffic generator → Istio ingress → A/B pods.
 During active canary analysis, the short-lived AnalysisJobs make HTTP requests
 as well; choose a later Kiali time window to isolate generator traffic.
+
+## Build and publish the shared image (before syncing the Rollouts)
+
+From repository root, with podman or docker installed and authenticated to GHCR:
+
+```bash
+# Optional: export GHCR_TOKEN from your private environment (never commit it).
+# This script runs registry login only if GHCR_TOKEN is supplied.
+bash scripts/build-push-full-single-service-greeter.sh
+```
+
+The published package must be public for these Rollouts to pull it without
+an imagePullSecret. Alternatively, configure imagePullSecrets in both
+Rollouts before deploying. **Build and push before committing the manifests**:
+Argo CD automatically synchronizes `main` and would otherwise reference
+an image that does not exist. Use a new immutable image tag for any future
+source change. `greeter-image.txt` is the image reference verified for both
+Rollouts by `scripts/full-single-service-spec.py`.
+
+You can edit the two identity ConfigMaps without building a new image.
+Environment variables are captured when a pod starts, so a ConfigMap edit
+requires replacing the pod (normally by a new GitOps Rollout revision)
+before the response identifier changes. During a BLUE/YELLOW rollout,
+stable and candidate pods of the same application use the same identity.
 
 ## One desired replica per application
 
@@ -202,12 +226,12 @@ curl -kfsS "$URL"
 watch -n 2 -c -- 'URL="https://$(oc get route full-single-service -n full-single-service -o jsonpath="{.spec.host}")/"; for app in a b; do curl -kfsS -H "x-app-target: $app" "$URL"; echo; done | sed -e "s/BLUE/\x1b[94mBLUE\x1b[0m/g" -e "s/YELLOW/\x1b[93mYELLOW\x1b[0m/g"'
 ```
 
-Representative responses (pod ID and counter will vary):
+Representative responses (ConfigMap identifiers stay constant; counters vary):
 
 ```text
-Application A - BLUE greeter => 'pod-a' : 1
-Application A - BLUE greeter => 'pod-a' : 2
-Application B - BLUE greeter => 'pod-b' : 1
+Application A - BLUE greeter => 'greeter-a-8f1c4e' : 1
+Application A - BLUE greeter => 'greeter-a-8f1c4e' : 2
+Application B - BLUE greeter => 'greeter-b-3d7a92' : 1
 ```
 
 Example traffic generator for Kiali, switching applications by HTTP header:
@@ -248,7 +272,7 @@ caused `x-app-target: b` requests to reach A. Use the read-only check first:
 bash scripts/reconcile-full-single-service-routing.sh check
 ```
 
-Once both Quarkus Rollouts have Ready pods and the GitOps revision is visible,
+Once both Greeter Rollouts have Ready pods and the GitOps revision is visible,
 apply the guarded routing-only fix if needed:
 
 ```bash

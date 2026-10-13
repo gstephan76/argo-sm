@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: full-single-service-b-identity
+  namespace: full-single-service
+  annotations:
+    argocd.argoproj.io/sync-wave: '0'
+data:
+  GREETER_INSTANCE_ID: 'greeter-b-3d7a92'

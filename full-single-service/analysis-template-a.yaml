@@ -34,6 +34,12 @@ spec:
                   - name: smoke-test
                     image: quay.io/curl/curl:8.22.0
                     imagePullPolicy: IfNotPresent
+                    env:
+                      - name: GREETER_INSTANCE_ID
+                        valueFrom:
+                          configMapKeyRef:
+                            name: full-single-service-a-identity
+                            key: GREETER_INSTANCE_ID
                     securityContext:
                       allowPrivilegeEscalation: false
                       capabilities:
@@ -57,6 +63,10 @@ spec:
                           # Last colon-separated number is the greeter's per-pod counter.
                           printf '%s\n' "$got" | grep -Eq '^Application A - {{args.expected-color}}[[:space:]].*:[[:space:]]*[0-9]+$' || {
                             echo "Unexpected greeter reply: $got" >&2
+                            exit 1
+                          }
+                          printf '%s\n' "$got" | grep -Fq "greeter => '$GREETER_INSTANCE_ID'" || {
+                            echo "Unexpected Greeter instance ID in response: $got" >&2
                             exit 1
                           }
                           echo "Probe $n: $got"

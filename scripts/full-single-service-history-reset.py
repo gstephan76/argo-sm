@@ -71,11 +71,56 @@ def validate_blue(rollout_obj, instance, expected_uid=None, expected_stable=None
         and (expected_stable is None or stable == expected_stable)
     )
     if not good:
+        details = {
+            "uid": uid,
+            "name": metadata.get("name"),
+            "phase": status.get("phase"),
+            "desired": spec.get("replicas"),
+            "updated": status.get("updatedReplicas"),
+            "available": status.get("availableReplicas"),
+            "stableRS": stable,
+            "currentPodHash": status.get("currentPodHash"),
+            "prefix": prefix,
+            "marker": marker,
+            "expected_uid": expected_uid,
+            "expected_stable": expected_stable,
+        }
         raise ResetError(
-            f"Refusing history reset: {name} is not a stable, fully available "
-            "BLUE baseline with unchanged identity/hash"
+            f"Refusing history reset until {name} is a stable, fully available "
+            f"BLUE baseline: {json.dumps(details, sort_keys=True)}"
         )
     return uid, stable
+
+
+def wait_for_blue(instance, deadline, expected_uid=None, expected_stable=None):
+    """Wait for status propagation without relaxing the BLUE deletion guards."""
+    rollout = f"full-single-service-{instance}"
+    while True:
+        obj = get_json("rollouts.argoproj.io", rollout)
+        metadata = obj.get("metadata") or {}
+        status = obj.get("status") or {}
+        spec = obj.get("spec") or {}
+        template = spec.get("template") or {}
+        env = ((template.get("spec") or {}).get("containers") or [{}])[0].get("env") or []
+        prefix = next((e.get("value") for e in env if e.get("name") == "MESSAGE_PREFIX"), None)
+        marker = ((template.get("metadata") or {}).get("annotations") or {}).get("demo-rollout-revision")
+        # A replacement Rollout, a different stable hash, or non-BLUE desired
+        # state must never cause an old cleanup operation to resume later.
+        if expected_uid is not None and metadata.get("uid") != expected_uid:
+            raise ResetError("Rollout UID changed while waiting; refusing history reset")
+        if expected_stable is not None and status.get("stableRS") != expected_stable:
+            raise ResetError("Stable ReplicaSet changed while waiting; refusing history reset")
+        if prefix != f"Application {instance.upper()} - BLUE" or marker != "baseline-blue":
+            raise ResetError("Expected BLUE baseline changed while waiting; refusing history reset")
+        if status.get("phase") == "Degraded":
+            raise ResetError("BLUE rollout is Degraded; refusing history reset")
+        try:
+            return validate_blue(obj, instance, expected_uid, expected_stable)
+        except ResetError as exc:
+            if time.monotonic() >= deadline:
+                raise ResetError(f"Timed out waiting for fully available BLUE state: {exc}") from exc
+            print(f"Waiting for BLUE readiness before history cleanup: {exc}", flush=True)
+            time.sleep(POLL_SECONDS)
 
 
 def inspect_resources(rs_list, ar_list, instance, uid, stable):
@@ -101,11 +146,10 @@ def inspect_resources(rs_list, ar_list, instance, uid, stable):
 
 def run(instance, timeout_seconds, dry_run=False):
     rollout = f"full-single-service-{instance}"
-    initial = get_json("rollouts.argoproj.io", rollout)
-    uid, stable = validate_blue(initial, instance)
     deadline = time.monotonic() + timeout_seconds
+    uid, stable = wait_for_blue(instance, deadline)
     while True:
-        validate_blue(get_json("rollouts.argoproj.io", rollout), instance, uid, stable)
+        wait_for_blue(instance, deadline, uid, stable)
         old_rs, runs, live_old, active_ar = inspect_resources(
             get_json("replicasets.apps"), get_json("analysisruns.argoproj.io"),
             instance, uid, stable,

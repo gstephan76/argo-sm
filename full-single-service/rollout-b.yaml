@@ -14,7 +14,7 @@ spec:
   template:
     metadata:
       annotations:
-        demo-rollout-revision: candidate-yellow-20261013T114123Z
+        demo-rollout-revision: baseline-blue
         prometheus.io/scrape: 'true'
         prometheus.io/path: /stats/prometheus
         prometheus.io/port: '15090'
@@ -31,7 +31,7 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
             - name: MESSAGE_PREFIX
-              value: "Application B - YELLOW"
+              value: "Application B - BLUE"
           ports:
             - name: http
               containerPort: 8080
@@ -79,33 +79,33 @@ spec:
               - templateName: full-single-service-b-smoke-test
             args:
               - name: expected-color
-                value: YELLOW
+                value: BLUE
         - setWeight: 25
         - analysis:
             templates:
               - templateName: full-single-service-b-smoke-test
             args:
               - name: expected-color
-                value: YELLOW
+                value: BLUE
         - setWeight: 50
         - analysis:
             templates:
               - templateName: full-single-service-b-smoke-test
             args:
               - name: expected-color
-                value: YELLOW
+                value: BLUE
         - setWeight: 75
         - analysis:
             templates:
               - templateName: full-single-service-b-smoke-test
             args:
               - name: expected-color
-                value: YELLOW
+                value: BLUE
         - setWeight: 100
         - analysis:
             templates:
               - templateName: full-single-service-b-smoke-test
             args:
               - name: expected-color
-                value: YELLOW
+                value: BLUE
         - pause: {} # operator-controlled final promotion

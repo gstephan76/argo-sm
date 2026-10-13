@@ -120,6 +120,38 @@ running. After promotion, the candidate becomes stable and the old ReplicaSet
 scales down; the corresponding Istio route normally returns to 100% stable /
 0% canary. These weights are managed by Argo Rollouts, not by the public Route.
 
+### Verify ingress traffic in Prometheus (Kiali attribution caveat)
+
+After a promotion, Argo Rollouts can leave the stable and canary Kubernetes
+Services selecting the same promoted pod. The Istio gateway routes using the
+VirtualService weights (normally 100% stable / 0% canary after promotion), but
+destination-side Istio telemetry may attribute requests to the canary Service
+because both Services resolve to the same pod and port. As a result, Kiali can
+show apparent canary traffic even when the gateway sends none.
+
+For the **gateway routing decision**, open Prometheus and run:
+
+```promql
+sum by (destination_service_name) (
+  rate(
+    istio_requests_total{
+      reporter="source",
+      source_workload="full-single-service-ingressgateway",
+      destination_workload_namespace="full-single-service",
+      destination_service_name=~"full-single-service-(a|b)-(stable|canary)"
+    }[2m]
+  )
+)
+```
+
+For an application that has finished promotion, expect a nonzero request rate
+for its `*-stable` destination while requests are being generated, and zero (or
+no series) for its `*-canary` destination. Verify both applications independently.
+These are requests per second, not percentage weights. If Kiali still shows a
+green canary edge, compare the Istio `source` versus `destination` reporters
+before treating it as a routing failure. Direct requests to canary Services
+(for example, analysis probes) are separate from ingress routing.
+
 ## One Route with header-based A/B selection
 
 Exactly **one** public OpenShift `Route` exists: `full-single-service`.

@@ -83,6 +83,17 @@ INSTANCE=a SHOW_RESPONSES=1 REQUESTS=40 bash scripts/full-single-service.sh traf
 INSTANCE=b SHOW_RESPONSES=1 REQUESTS=40 bash scripts/full-single-service.sh traffic
 ```
 
+## Automatic history reset during prepare
+
+`INSTANCE=a|b ... prepare` restores the selected application's BLUE baseline,
+waits for all five analysis gates when a rollout occurs, and promotes normally
+at the final pause. It then **deletes completed historical AnalysisRuns and
+old, scaled-down ReplicaSets owned by the selected Rollout**. It does not
+remove the healthy BLUE ReplicaSet or touch the other application's history.
+The cleanup waits for running analyses and old replicas to finish and refuses
+to delete them while active. This is a destructive default: export important
+analysis results before running `prepare`. Revision numbers are not reset.
+
 ## Watch VirtualService weights and Rollouts
 
 Open separate terminals while running `start` or `promote`. Both applications

@@ -286,7 +286,9 @@ case "$command" in
         fatal "Timed out waiting for BLUE analysis and promotion"
     fi
     wait_rollout healthy baseline-blue
-    echo "Canonical BLUE baseline ready"
+    echo "==> Resetting completed history for $ROLLOUT"
+    python3 scripts/full-single-service-history-reset.py --instance "$INSTANCE" --timeout-seconds "$TIMEOUT_SECONDS"
+    echo "Canonical BLUE baseline ready; previous history cleared"
     ;;
   start)
     require_git_head
@@ -388,7 +390,7 @@ Both instances are managed by the same Argo CD Application and share a namespace
 
   validate  Validate new files OFFLINE (no cluster commands)
   deploy    Apply ONLY this demo's Argo CD Application; show sync progress and diagnostics
-  prepare   Declaratively restore BLUE baseline and recover trusted state
+  prepare   Validate BLUE and reset old ReplicaSets/AnalysisRuns by default
   start     Commit/push YELLOW candidate and wait for final pause
   promote   Approve YELLOW after the last analysis gate
   traffic   Send REQUESTS=50 greeter requests via x-app-target on shared A Route

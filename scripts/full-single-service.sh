@@ -216,6 +216,11 @@ push_desired() {
   fi
   git fetch origin main
   [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] || fatal "Push verification failed"
+
+  # Trigger GitOps reconciliation immediately after updating origin/main.
+  oc annotate applications.argoproj.io "$APP" \
+    -n "$ARGOCD_NS" \
+    argocd.argoproj.io/refresh=hard --overwrite >/dev/null
 }
 
 case "$command" in

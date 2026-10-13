@@ -256,7 +256,34 @@ case "$command" in
     current="$(get_rollout '{.status.currentPodHash}')"
     phase="$(get_rollout '{.status.phase}')"
     if [[ "$phase" != Healthy || -z "$stable" || "$stable" != "$current" ]]; then
-      oc argo rollouts promote "$ROLLOUT" --full -n "$NS"
+      echo "==> Waiting for BLUE analysis gates and final promotion pause"
+      deadline=$((SECONDS + TIMEOUT_SECONDS))
+
+      while (( SECONDS < deadline )); do
+        phase="$(get_rollout '{.status.phase}')"
+        step="$(get_rollout '{.status.currentStepIndex}')"
+        reason="$(get_rollout '{.status.pauseConditions[0].reason}')"
+        stable="$(get_rollout '{.status.stableRS}')"
+        current="$(get_rollout '{.status.currentPodHash}')"
+
+        if [[ "$phase" == Healthy && -n "$stable" && "$stable" == "$current" ]]; then
+          break
+        fi
+
+        if [[ "$phase" == Paused && "$step" == 10 && "$reason" == CanaryPauseStep ]]; then
+          echo "==> BLUE analysis gates completed; promoting normally"
+          oc argo rollouts promote "$ROLLOUT" -n "$NS"
+          break
+        fi
+
+        [[ "$phase" != Degraded && "$reason" != InconclusiveAnalysisRun ]] ||
+          fatal "BLUE rollout is Degraded or analysis is Inconclusive"
+
+        sleep "$POLL_SECONDS"
+      done
+
+      (( SECONDS < deadline )) ||
+        fatal "Timed out waiting for BLUE analysis and promotion"
     fi
     wait_rollout healthy baseline-blue
     echo "Canonical BLUE baseline ready"

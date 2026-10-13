@@ -187,6 +187,8 @@ curl -kfsS -H 'x-app-target: b' "$URL"
 
 # No header: default to A
 curl -kfsS "$URL"
+
+watch -n 2 -c -- 'URL="https://$(oc get route full-single-service -n full-single-service -o jsonpath="{.spec.host}")/"; for app in a b; do curl -kfsS -H "x-app-target: $app" "$URL"; echo; done | sed -e "s/BLUE/\x1b[94mBLUE\x1b[0m/g" -e "s/YELLOW/\x1b[93mYELLOW\x1b[0m/g"'
 ```
 
 Representative responses (pod ID and counter will vary):

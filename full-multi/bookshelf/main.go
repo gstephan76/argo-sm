@@ -35,7 +35,7 @@ type response struct {
 	Backend       string `json:"backend,omitempty"`
 }
 type server struct {
-	role, app, prefix, backendURL, dbStable, dbCanary, dbName, dbUser, dbPassword string
+	role, app, prefix, backendURL, crudURL, dbStable, dbCanary, dbName, dbUser, dbPassword string
 	client                                                                        *http.Client
 }
 
@@ -46,7 +46,7 @@ func track(h http.Header, name string) string {
 	return "stable"
 }
 func newServer() *server {
-	return &server{role: os.Getenv("ROLE"), app: os.Getenv("APP_ID"), prefix: os.Getenv("MESSAGE_PREFIX"), backendURL: os.Getenv("BACKEND_API_URL"), dbStable: os.Getenv("DB_HOST_STABLE"), dbCanary: os.Getenv("DB_HOST_CANARY"), dbName: os.Getenv("DB_NAME"), dbUser: os.Getenv("DB_USER"), dbPassword: os.Getenv("DB_PASSWORD"), client: &http.Client{Timeout: 8 * time.Second}}
+	return &server{role: os.Getenv("ROLE"), app: os.Getenv("APP_ID"), prefix: os.Getenv("MESSAGE_PREFIX"), backendURL: os.Getenv("BACKEND_API_URL"), crudURL: os.Getenv("CRUD_API_URL"), dbStable: os.Getenv("DB_HOST_STABLE"), dbCanary: os.Getenv("DB_HOST_CANARY"), dbName: os.Getenv("DB_NAME"), dbUser: os.Getenv("DB_USER"), dbPassword: os.Getenv("DB_PASSWORD"), client: &http.Client{Timeout: 8 * time.Second}}
 }
 func (s *server) routes() http.Handler {
 	mux := http.NewServeMux()
@@ -74,7 +74,11 @@ func propagateTraceHeaders(dst, src http.Header) {
 }
 
 func (s *server) upstream(r *http.Request) ([]byte, int, error) {
-	u, err := url.Parse(s.backendURL)
+	destination := s.backendURL
+	if s.role == "backend" {
+		destination = s.crudURL
+	}
+	u, err := url.Parse(destination)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -103,22 +107,38 @@ func (s *server) books(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", 405)
 		return
 	}
-	if s.role == "front" {
+	if s.role == "front" || s.role == "backend" {
 		b, status, err := s.upstream(r)
 		if err != nil {
-			http.Error(w, "backend unreachable: "+err.Error(), 502)
+			http.Error(w, "downstream unreachable: "+err.Error(), http.StatusBadGateway)
 			return
+		}
+		// CRUD owns SQL; Backend retains its identity in the client JSON.
+		if s.role == "backend" && status == http.StatusOK {
+			var out response
+			if err := json.Unmarshal(b, &out); err != nil {
+				http.Error(w, "invalid CRUD response", http.StatusBadGateway)
+				return
+			}
+			out.Backend = s.prefix
+			b, err = json.Marshal(out)
+			if err != nil {
+				http.Error(w, "cannot encode CRUD response", http.StatusInternalServerError)
+				return
+			}
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
 		_, _ = w.Write(b)
 		return
 	}
-	if s.role != "backend" {
+	if s.role != "crud" {
 		http.Error(w, "invalid role", 500)
 		return
 	}
-	out, err := s.queryBooks(r.Context(), track(r.Header, "x-db-track"))
+	// This internal header is overwritten by the CRUD Istio VirtualService.
+	// x-db-track itself is intentionally not used to select an SQL endpoint.
+	out, err := s.queryBooks(r.Context(), track(r.Header, "x-crud-db-target"))
 	if err != nil {
 		log.Printf("database query error: %s", err)
 		http.Error(w, "database unavailable", 503)
@@ -171,7 +191,7 @@ func (s *server) queryBooks(ctx context.Context, t string) (response, error) {
 		return response{}, err
 	}
 	defer rows.Close()
-	out := response{Books: []book{}, App: s.app, DatabaseTrack: t, DatabaseHost: host, Backend: s.prefix}
+	out := response{Books: []book{}, App: s.app, DatabaseTrack: t, DatabaseHost: host}
 	for rows.Next() {
 		var b book
 		if err = rows.Scan(&b.ID, &b.Title, &b.Author, &b.Year); err != nil {
@@ -182,7 +202,7 @@ func (s *server) queryBooks(ctx context.Context, t string) (response, error) {
 	return out, rows.Err()
 }
 
-var indexTemplate = template.Must(template.New("books").Parse(`<!doctype html><html><head><title>Full Multi Bookshelf</title><style>body{font-family:system-ui;margin:2.5rem;max-width:900px}table{border-collapse:collapse}td,th{padding:.6rem;border-bottom:1px solid #bbb}code{background:#eee;padding:2px}</style></head><body><h1>Bookshelf {{.App}}</h1><p>{{.Prefix}}</p><p>Database track: <code>{{.Track}}</code> via <code>{{.Host}}</code></p><table><tr><th>Title</th><th>Author</th><th>Year</th></tr>{{range .Books}}<tr><td>{{.Title}}</td><td>{{.Author}}</td><td>{{.Year}}</td></tr>{{end}}</table><p>Headers: x-app-target=a|b, x-front-track=stable|canary, x-backend-track=stable|canary, x-db-track=stable|canary.</p></body></html>`))
+var indexTemplate = template.Must(template.New("books").Parse(`<!doctype html><html><head><title>Full Multi Bookshelf</title><style>body{font-family:system-ui;margin:2.5rem;max-width:900px}table{border-collapse:collapse}td,th{padding:.6rem;border-bottom:1px solid #bbb}code{background:#eee;padding:2px}</style></head><body><h1>Bookshelf {{.App}}</h1><p>{{.Prefix}}</p><p>Database track: <code>{{.Track}}</code> via <code>{{.Host}}</code></p><table><tr><th>Title</th><th>Author</th><th>Year</th></tr>{{range .Books}}<tr><td>{{.Title}}</td><td>{{.Author}}</td><td>{{.Year}}</td></tr>{{end}}</table><p>Headers: x-app-target=a|b, x-front-track=stable|canary, x-backend-track=stable|canary, x-db-track=blue|green (aliases stable|canary).</p></body></html>`))
 
 func (s *server) index(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
@@ -218,15 +238,21 @@ func main() {
 	if s.app != "A" && s.app != "B" {
 		log.Fatal("APP_ID must be A or B")
 	}
-	if s.role != "front" && s.role != "backend" {
-		log.Fatal("ROLE must be front or backend")
+	if s.role != "front" && s.role != "backend" && s.role != "crud" {
+		log.Fatal("ROLE must be front, backend or crud")
 	}
-	if s.prefix != "Application "+s.app+" - BLUE" && s.prefix != "Application "+s.app+" - YELLOW" {
+	if s.role == "crud" {
+		if s.prefix != "Application "+s.app+" - CRUD" {
+			log.Fatal("invalid CRUD MESSAGE_PREFIX")
+		}
+	} else if s.prefix != "Application "+s.app+" - BLUE" && s.prefix != "Application "+s.app+" - YELLOW" {
 		log.Fatal("invalid MESSAGE_PREFIX")
 	}
 	port := "3000"
 	if s.role == "backend" {
 		port = "5000"
+	} else if s.role == "crud" {
+		port = "8080"
 	}
 	log.Printf("bookshelf %s %s listening on %s", s.app, s.role, port)
 	srv := &http.Server{Addr: ":" + port, Handler: s.routes(), ReadHeaderTimeout: 5 * time.Second}

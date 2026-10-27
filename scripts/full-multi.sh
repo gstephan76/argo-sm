@@ -117,7 +117,7 @@ case "$cmd" in
    db_track="${DB_TRACK:-stable}"
    [[ "$front_track" =~ ^(stable|canary|weighted)$ ]] || fail 'FRONT_TRACK must be stable|canary|weighted'
    [[ "$backend_track" =~ ^(stable|canary|weighted)$ ]] || fail 'BACKEND_TRACK must be stable|canary|weighted'
-   [[ "$db_track" =~ ^(stable|canary)$ ]] || fail 'DB_TRACK must be stable|canary'
+   [[ "$db_track" =~ ^(stable|canary|blue|green)$ ]] || fail 'DB_TRACK must be stable|canary|blue|green'
    headers=(-H "x-app-target: $INSTANCE" -H "x-db-track: $db_track")
    [[ "$front_track" == weighted ]] || headers+=(-H "x-front-track: $front_track")
    [[ "$backend_track" == weighted ]] || headers+=(-H "x-backend-track: $backend_track")
@@ -128,7 +128,7 @@ case "$cmd" in
    ;;
  help|-h|--help)
    echo 'Usage: INSTANCE=a|b bash scripts/full-multi.sh validate|deploy|prepare|start|promote|traffic|status'
-   echo 'Set FRONT_TRACK/BACKEND_TRACK=stable|canary|weighted and DB_TRACK=stable|canary.'
+   echo 'Set FRONT_TRACK/BACKEND_TRACK=stable|canary|weighted and DB_TRACK=blue|green (or stable|canary).'
    echo 'weighted omits that tier header and lets Istio enforce 50/50 at the canary pause.'
    ;;
  *)fail "Unknown command $cmd";;

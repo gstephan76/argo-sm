@@ -41,7 +41,7 @@ unless intentionally bypassing outstanding gates.
 | `x-app-target` | `a`, `b` | A/B stack, ingress routing |
 | `x-front-track` | `stable`, `canary`, *absent* | Force Front or use weighted 50/50 |
 | `x-backend-track` | `stable`, `canary`, *absent* | Force Backend or use weighted 50/50 |
-| `x-db-track` | `stable`, `canary` | Backend selects MariaDB active/preview Service over TCP |
+| `x-db-track` | `blue`, `green` (also `stable`, `canary`) | CRUD Istio VirtualService routes HTTP; CRUD selects MariaDB active/preview over TCP |
 
 **The MySQL protocol has no HTTP headers.** MariaDB blue-green switching is
 performed by Argo Rollouts changing the Service selector. When `x-db-track` is

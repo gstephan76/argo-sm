@@ -33,13 +33,35 @@ def verify():
                 assert steps.rstrip().endswith('- pause: {}'),path
                 assert steps.count('        - pause: {}')==1,path
                 assert s.count('value: BLUE')==3 or s.count('value: YELLOW')==3,path
-                assert 'ghcr.io/gstephan76/argo-sm-bookshelf:full-multi-tracing-v2' in s
+                assert 'ghcr.io/gstephan76/argo-sm-bookshelf:full-multi-crud-v3' in s
             else:
                 assert '      autoPromotionEnabled: false' in s, path
                 assert '          emptyDir: {}' in s, path
                 assert 'activeService:' in s and 'previewService:' in s, path
             names.append(f'{tier}-{app}')
-    assert len(names)==len(set(names))==6
+    assert len(names)==len(set(names))==6  # three demo lifecycle Rollouts per A/B
+    for app in 'ab':
+        r=(D/f'rollout-crud-{app}.yaml').read_text()
+        assert f'  name: crud-{app}\n' in r
+        assert '  replicas: 1\n' in r
+        assert '    canary:\n' in r and '      maxSurge: 1' in r
+        assert '      maxUnavailable: 0' in r
+        assert '            - name: ROLE\n              value: crud' in r
+        assert '            - name: DB_PASSWORD' in r
+        assert 'ghcr.io/gstephan76/argo-sm-bookshelf:full-multi-crud-v3' in r
+        b=(D/f'rollout-backend-{app}.yaml').read_text()
+        assert f'http://crud-{app}.full-multi.svc.cluster.local:8080/api/books' in b
+        assert '            - name: DB_PASSWORD' not in b
+        vs=(D/f'crud-{app}-virtualservice.yaml').read_text()
+        for needle in ('x-db-track:', 'exact: green', 'exact: canary',
+                       'x-crud-db-target: canary', 'x-crud-db-target: stable',
+                       f'crud-{app}-green.full-multi.svc.cluster.local',
+                       f'crud-{app}-blue.full-multi.svc.cluster.local'):
+            assert needle in vs, (app, needle)
+        for suffix in ('', '-blue', '-green'):
+            s=(D/f'service-crud-{app}{suffix}.yaml').read_text()
+            assert f'  name: crud-{app}{suffix}\n' in s
+            assert f'    app: crud-{app}\n' in s
     a=(D/'front-virtualservice.yaml').read_text()
     for name in ('primary','secondary','front-b-force-canary','front-a-force-canary','x-app-target','x-front-track'):
         assert name in a, name
@@ -55,7 +77,7 @@ def verify():
         assert name in script,name
     assert 'otel-tracing' in (D/'telemetry.yaml').read_text()
     assert (D/'podmonitor-istio-proxies.yaml').is_file()
-    print('PASS: six Rollouts, routing and observability contracts')
+    print('PASS: eight Rollouts, CRUD DB routing and observability contracts')
 
 def setcolor(color,instance):
     col=color.upper()

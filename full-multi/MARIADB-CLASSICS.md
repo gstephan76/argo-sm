@@ -10,7 +10,7 @@ and does not introduce percentage-based SQL traffic routing.
 - Both active/preview Services remain `mariadb-{a,b}-stable` and
   `mariadb-{a,b}-canary`, respectively. The `-canary` name here denotes
   the **blue-green preview Service**, not a MariaDB canary strategy.
-- The Go Backend's `INSERT IGNORE` sample inserts use IDs 1–3, deliberately
+- The Go CRUD handler's `INSERT IGNORE` sample inserts use IDs 1–3, deliberately
   already seeded here, so querying the preview preserves **exactly 20 rows**.
 - The existing image entrypoint, credentials Secrets, and blue-green strategy
   are retained. Source for the init hook: sclorg/mariadb-container 10.11

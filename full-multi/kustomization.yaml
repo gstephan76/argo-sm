@@ -7,11 +7,15 @@ resources:
   - analysis-front-b.yaml
   - backend-a-virtualservice.yaml
   - backend-b-virtualservice.yaml
+  - crud-a-virtualservice.yaml
+  - crud-b-virtualservice.yaml
   - front-virtualservice.yaml
   - gateway.yaml
   - namespace.yaml
   - rollout-backend-a.yaml
   - rollout-backend-b.yaml
+  - rollout-crud-a.yaml
+  - rollout-crud-b.yaml
   - rollout-front-a.yaml
   - rollout-front-b.yaml
   - rollout-mariadb-a.yaml
@@ -22,6 +26,12 @@ resources:
   - service-backend-b-canary.yaml
   - service-backend-b-stable.yaml
   - service-backend-b.yaml
+  - service-crud-a.yaml
+  - service-crud-a-blue.yaml
+  - service-crud-a-green.yaml
+  - service-crud-b.yaml
+  - service-crud-b-blue.yaml
+  - service-crud-b-green.yaml
   - service-front-a-canary.yaml
   - service-front-a-stable.yaml
   - service-front-b-canary.yaml

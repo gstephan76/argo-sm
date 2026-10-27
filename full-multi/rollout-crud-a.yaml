@@ -1,0 +1,81 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: crud-a
+  namespace: full-multi
+  annotations:
+    argocd.argoproj.io/sync-wave: '1'
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app: crud-a
+  template:
+    metadata:
+      labels:
+        app: crud-a
+        app.kubernetes.io/name: full-multi-crud
+        sidecar.istio.io/inject: 'true'
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '15090'
+        prometheus.io/path: /stats/prometheus
+    spec:
+      containers:
+        - name: crud
+          image: ghcr.io/gstephan76/argo-sm-bookshelf:full-multi-crud-v3
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: APP_ID
+              value: "A"
+            - name: ROLE
+              value: crud
+            - name: MESSAGE_PREFIX
+              value: "Application A - CRUD"
+            - name: DB_HOST_STABLE
+              value: mariadb-a-stable.full-multi.svc.cluster.local
+            - name: DB_HOST_CANARY
+              value: mariadb-a-canary.full-multi.svc.cluster.local
+            - name: DB_NAME
+              value: bookdb
+            - name: DB_USER
+              value: bookapp
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials-a
+                  key: password
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+  # Rolling update: CRUD has one Pod normally, two briefly during an update.
+  # This rollout is independent of the MariaDB BLUE/GREEN lifecycle.
+  strategy:
+    canary:
+      maxSurge: 1
+      maxUnavailable: 0

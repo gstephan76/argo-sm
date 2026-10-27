@@ -25,7 +25,7 @@ spec:
     spec:
       containers:
         - name: bookshelf-front
-          image: ghcr.io/gstephan76/argo-sm-bookshelf:full-multi-tracing-v2
+          image: ghcr.io/gstephan76/argo-sm-bookshelf:full-multi-crud-v3
           imagePullPolicy: IfNotPresent
           env:
             - name: APP_ID

@@ -1,4 +1,4 @@
-# full-multi — Six-Rollout Bookshelf Demo on OpenShift
+# full-multi — Eight-Rollout Bookshelf Demo on OpenShift
 
 `full-multi` is a GitOps-managed, multi-tier Bookshelf demonstration for **OpenShift,
 Argo CD, Argo Rollouts, and OpenShift Service Mesh (Istio)**. It implements two
@@ -8,8 +8,9 @@ not part of this installation.
 
 The demo's main feature is **HTTP-header-directed routing at multiple tiers**.
 It allows an HTTP client to request a particular application's Front revision,
-Backend revision, and MariaDB track independently. Each application is made of
-three Rollouts, giving **exactly six Rollouts** in total.
+Backend revision, and MariaDB track independently. Each application has Front, Backend, CRUD and MariaDB Rollouts, giving
+**eight Rollouts** in total. The `prepare/start/promote` commands intentionally
+continue to advance only Front, Backend, and MariaDB.
 
 > **Status:** This is a lab/demo design. The manifests and scripts were checked
 > offline; the six live rollout transitions, the container build in your
@@ -27,24 +28,28 @@ flowchart TB
     subgraph APP_A[Application A — namespace full-multi]
         FA[Rollout front-a\nStable / Canary]
         BA[Rollout backend-a\nStable / Canary]
+        CA[Rollout crud-a\nHTTP to SQL]
         DBA[Rollout mariadb-a\nActive / Preview]
         FA -->|HTTP :5000\nx-backend-track| BA
-        BA -->|MariaDB TCP :3306\nx-db-track selected by Backend| DBA
+        BA -->|HTTP :8080\nx-db-track via Istio| CA
+        CA -->|MariaDB TCP :3306| DBA
     end
 
     subgraph APP_B[Application B — namespace full-multi]
         FB[Rollout front-b\nStable / Canary]
         BB[Rollout backend-b\nStable / Canary]
+        CB[Rollout crud-b\nHTTP to SQL]
         DBB[Rollout mariadb-b\nActive / Preview]
         FB -->|HTTP :5000\nx-backend-track| BB
-        BB -->|MariaDB TCP :3306\nx-db-track selected by Backend| DBB
+        BB -->|HTTP :8080\nx-db-track via Istio| CB
+        CB -->|MariaDB TCP :3306| DBB
     end
 
     AppVS -->|A or default| FA
     AppVS -->|B| FB
 ```
 
-The Istio ingress gateway is shared across A/B, but the two three-tier stacks
+The Istio ingress gateway is shared across A/B, but the two four-tier stacks
 have separate Pods, Services, database Secrets, and MariaDB instances. Front
 and Backend use the same custom Bookshelf container image, with their behavior
 selected by environment variables. MariaDB uses a separate database image.
@@ -55,18 +60,19 @@ selected by environment variables. MariaDB uses a separate database image.
 |---|---|---|---|---|
 | Front | `front-a` | `front-b` | Istio canary | HTTP 3000 |
 | Backend | `backend-a` | `backend-b` | Istio canary | HTTP 5000 |
+| CRUD | `crud-a` | `crud-b` | Rolling update (canary) | HTTP 8080 |
 | MariaDB | `mariadb-a` | `mariadb-b` | Blue-green | TCP 3306 |
 
-The deployment declares **six Rollouts**: four HTTP canaries and two database
-blue-green Rollouts. Each has `-stable` and `-canary` Services (12 track Services).
-Two additional backend anchor Services (`backend-a` and `backend-b`) provide
+The deployment declares **eight Rollouts**: four HTTP canaries, two CRUD
+rolling-update Rollouts and two database blue-green Rollouts. Each has `-stable` and `-canary` Services (12 track Services).
+Two backend anchor Services (`backend-a` and `backend-b`) provide
 stable DNS names to which the internal Istio VirtualServices apply. Together
-with the gateway Service, there are **15 Services** in the manifests.
+with the gateway Service and six CRUD Services, there are **21 Services** in the manifests.
 
 Other shared resources include `Route/full-multi`,
 `Deployment/full-multi-ingressgateway`, `Gateway/full-multi-gateway`,
 `VirtualService/full-multi-front-router`, two internal backend VirtualServices,
-four HTTP `AnalysisTemplate` resources, and `Telemetry/full-multi-tracing`.
+four HTTP `AnalysisTemplate` resources, the two CRUD VirtualServices, and `Telemetry/full-multi-tracing`.
 
 ## 2. Request routing with HTTP headers
 
@@ -75,17 +81,17 @@ four HTTP `AnalysisTemplate` resources, and `Telemetry/full-multi-tracing`.
 | `x-app-target` | `a` / `b` | Istio ingress | `b` selects application B; missing or other values select A |
 | `x-front-track` | `stable` / `canary` | Ingress VirtualService | Forces Front track; without it, use Argo Rollouts' weighted route |
 | `x-backend-track` | `stable` / `canary` | Internal backend VirtualService | Forces Backend track; without it, use the independent weighted route |
-| `x-db-track` | `stable` / `canary` | Backend application | Chooses that application's MariaDB active (`stable`) or preview (`canary`) Service |
+| `x-db-track` | `blue` / `green` (also `stable` / `canary`) | CRUD Istio VirtualService | Selects BLUE or GREEN HTTP route; CRUD opens SQL to the matching MariaDB Service |
 
 Routing selection is **per HTTP request**, not a deployment-wide setting.
 The Front application explicitly forwards `x-backend-track` and `x-db-track`
 when it makes an HTTP request to the Backend. Istio does not automatically
 propagate arbitrary application headers across separately created HTTP calls.
 
-`x-db-track` is **not forwarded to MariaDB**: the Backend interprets it and
-opens a SQL connection to the appropriate MariaDB Service. The database only
-receives its native TCP protocol. A missing or unrecognized database-track
-header selects `stable` in the current application implementation.
+`x-db-track` is forwarded over HTTP from Front to Backend to the CRUD
+VirtualService. Istio selects the BLUE/GREEN logical CRUD Service and overwrites
+`x-crud-db-target` to `stable`/`canary`. The CRUD pod alone opens the native
+MariaDB TCP connection. A missing/unrecognized database track defaults to BLUE.
 
 Forced `canary` / database-preview routes are usable **only when their candidate
 Pods are running and ready**. If no candidate endpoint exists, a `503` is
@@ -102,15 +108,15 @@ ghcr.io/gstephan76/argo-sm-bookshelf:full-multi-v1
 
 `ROLE=front` serves HTTP on port `3000`, renders a Bookshelf HTML page at `/`,
 and forwards `/api/books` requests to its application's Backend. `ROLE=backend`
-serves HTTP on port `5000`, queries MariaDB, and returns JSON including the
+serves HTTP on port `5000`, queries the CRUD HTTP service, and returns JSON including the
 selected application, database track, database host, and backend prefix.
 The Front/Backend image is **not** a byte-for-byte copy of the original
 `quay.io/gstephan/frontend:latest` and `quay.io/gstephan/backend:latest` images;
 it is an adapted demonstration implementing these header-routing semantics.
 
 The sample database is `bookdb`, accessed by user `bookapp`, and contains
-three sample books inserted by the Backend on its first successful query.
-Each application's database credentials are read from an independent Secret:
+three sample books inserted by CRUD on its first successful SQL query.
+Each application's CRUD pod reads its database credentials from an independent Secret:
 `db-credentials-a` or `db-credentials-b`.
 
 **Database lifecycle and safety:** `mariadb-a` and `mariadb-b` are Rollouts using
@@ -138,7 +144,7 @@ upgrade pattern**.
 - A working `otel-tracing` provider **if** you want traces sent to Tempo; the
   manifests reference that provider but do not install the Collector or Tempo.
 
-All six Rollouts use `replicas: 1` as the steady-state desired count. During
+All eight Rollouts use `replicas: 1` as the steady-state desired count. During
 canary/blue-green operations, additional revision Pods can coexist, including
 two different database datasets.
 
@@ -471,3 +477,7 @@ argo-sm/
 
 **Scope:** This README documents the six-Rollout `full-multi` demo only. The
 `full-single-service` demo and its helper scripts remain independent.
+
+## CRUD proxy architecture update
+
+The backends now call independent HTTP CRUD proxies via `CRUD_API_URL`. Istio `crud-{a,b}-router` reads `x-db-track` and directs each request to the BLUE or GREEN logical CRUD Service, injecting an internal SQL-target header. CRUD alone owns SQL credentials and MariaDB TCP. See [CRUD-TIER.md](CRUD-TIER.md) for the architecture, build order, operational checks and the eight-Rollout inventory.

@@ -1,0 +1,41 @@
+# Only the Backend calls this internal HTTP endpoint.
+# The two track Services intentionally select the SAME CRUD Pod(s).
+# Istio sets the authoritative database selection per matched request;
+# CRUD converts HTTP -> native SQL using the selected MariaDB Service.
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: crud-a-router
+  namespace: full-multi
+spec:
+  hosts:
+    - crud-a.full-multi.svc.cluster.local
+  gateways: [mesh]
+  http:
+    - name: crud-a-green
+      match:
+        - headers:
+            x-db-track:
+              exact: green
+        - headers:
+            x-db-track:
+              exact: canary
+      headers:
+        request:
+          set:
+            x-crud-db-target: canary
+      route:
+        - destination:
+            host: crud-a-green.full-multi.svc.cluster.local
+            port:
+              number: 8080
+    - name: crud-a-blue-default
+      headers:
+        request:
+          set:
+            x-crud-db-target: stable
+      route:
+        - destination:
+            host: crud-a-blue.full-multi.svc.cluster.local
+            port:
+              number: 8080

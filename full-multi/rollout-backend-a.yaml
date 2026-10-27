@@ -25,7 +25,7 @@ spec:
     spec:
       containers:
         - name: bookshelf-backend
-          image: ghcr.io/gstephan76/argo-sm-bookshelf:full-multi-tracing-v2
+          image: ghcr.io/gstephan76/argo-sm-bookshelf:full-multi-crud-v3
           imagePullPolicy: IfNotPresent
           env:
             - name: APP_ID
@@ -34,19 +34,8 @@ spec:
               value: "backend"
             - name: MESSAGE_PREFIX
               value: "Application A - YELLOW"
-            - name: DB_HOST_STABLE
-              value: mariadb-a-stable.full-multi.svc.cluster.local
-            - name: DB_HOST_CANARY
-              value: mariadb-a-canary.full-multi.svc.cluster.local
-            - name: DB_NAME
-              value: bookdb
-            - name: DB_USER
-              value: bookapp
-            - name: DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: db-credentials-a
-                  key: password
+            - name: CRUD_API_URL
+              value: "http://crud-a.full-multi.svc.cluster.local:8080/api/books"
           ports:
             - name: http
               containerPort: 5000

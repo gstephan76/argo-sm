@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: crud-a
+  namespace: full-multi
+spec:
+  selector:
+    app: crud-a
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080

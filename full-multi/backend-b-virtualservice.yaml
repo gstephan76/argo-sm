@@ -5,7 +5,6 @@ metadata:
   namespace: full-multi
 spec:
   hosts:
-    - backend-b
     - backend-b.full-multi.svc.cluster.local
   gateways: [mesh]
   http:

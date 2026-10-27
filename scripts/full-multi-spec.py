@@ -24,8 +24,15 @@ def verify():
             assert (f'{tier}-{app}-stable' in s and f'{tier}-{app}-canary' in s)
             if tier!='mariadb':
                 assert '      trafficRouting:' in s and '      steps:' in s
-                assert s.count('- analysis:') == 5, path
-                assert s.count('value: BLUE')==5 or s.count('value: YELLOW')==5, path
+                # With Istio routing, four HTTP Rollouts ramp to 50% and
+                # hold indefinitely until manual promotion. The pause is
+                # step index 6 (0-based): 10/analyze,25/analyze,50/analyze,pause.
+                steps=s.split('      steps:\n',1)[1]
+                assert re.findall(r'^        - setWeight: (\d+)$',steps,re.M)==['10','25','50'],path
+                assert steps.count('        - analysis:')==3,path
+                assert steps.rstrip().endswith('- pause: {}'),path
+                assert steps.count('        - pause: {}')==1,path
+                assert s.count('value: BLUE')==3 or s.count('value: YELLOW')==3,path
                 assert 'ghcr.io/gstephan76/argo-sm-bookshelf:full-multi-tracing-v2' in s
             else:
                 assert '      autoPromotionEnabled: false' in s, path
@@ -62,7 +69,7 @@ def setcolor(color,instance):
             s,n=re.subn(r'(              value: "Application [AB] - )(BLUE|YELLOW)(")',lambda m:m[1]+col+m[3],s)
             if n!=1:raise SystemExit(f'missing single MESSAGE_PREFIX in {p}')
             s,n=re.subn(r'(                value: )(BLUE|YELLOW)$',lambda m:m[1]+col,s,flags=re.M)
-            if n!=5:raise SystemExit(f'missing five analysis colors in {p}')
+            if n!=3:raise SystemExit(f'missing three analysis colors in {p}')
         p.write_text(s)
     verify();print(f'Set {instance.upper()} to {col} marker={marker}')
 if __name__=='__main__':

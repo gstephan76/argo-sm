@@ -97,18 +97,4 @@ spec:
             args:
               - name: expected-color
                 value: BLUE
-        - setWeight: 75
-        - analysis:
-            templates:
-              - templateName: smoke-front-a
-            args:
-              - name: expected-color
-                value: BLUE
-        - setWeight: 100
-        - analysis:
-            templates:
-              - templateName: smoke-front-a
-            args:
-              - name: expected-color
-                value: BLUE
         - pause: {}

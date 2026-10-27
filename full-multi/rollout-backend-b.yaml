@@ -108,18 +108,4 @@ spec:
             args:
               - name: expected-color
                 value: BLUE
-        - setWeight: 75
-        - analysis:
-            templates:
-              - templateName: smoke-backend-b
-            args:
-              - name: expected-color
-                value: BLUE
-        - setWeight: 100
-        - analysis:
-            templates:
-              - templateName: smoke-backend-b
-            args:
-              - name: expected-color
-                value: BLUE
         - pause: {}

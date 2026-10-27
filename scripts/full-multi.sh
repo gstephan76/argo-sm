@@ -5,6 +5,8 @@ INSTANCE="${INSTANCE:-a}"
 [[ "$INSTANCE" == a || "$INSTANCE" == b ]] || { echo 'INSTANCE must be a or b' >&2; exit 1; }
 NS=full-multi; APP=full-multi; ARGOCD_NS="${ARGOCD_NAMESPACE:-openshift-gitops}"
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-900}"; POLL_SECONDS="${POLL_SECONDS:-5}"
+# 0-based canary pause step: 10/analyze, 25/analyze, 50/analyze, pause.
+CANARY_PAUSE_STEP_INDEX=6
 cmd="${1:-help}"
 fail(){ echo "ERROR: $*" >&2; exit 1; }
 require(){ command -v "$1" >/dev/null || fail "Missing $1"; }
@@ -24,9 +26,9 @@ ready(){
    if [[ "$phase" == Healthy ]]; then [[ "$desired" == healthy ]] && return 0;fi
    if [[ "$phase" == Paused ]]; then
      if [[ "$desired" == paused ]]; then
-       # Only HTTP Rollouts should wait for the final 100% analysis gate.
-       if [[ "$name" == mariadb-* || "$step" == 10 ]]; then return 0;fi
-     elif [[ "$desired" == healthy && ( "$name" == mariadb-* || "$step" == 10 ) ]]; then
+       # HTTP canaries must reach the indefinite manual pause at 50%.
+       if [[ "$name" == mariadb-* || "$step" == "$CANARY_PAUSE_STEP_INDEX" ]]; then return 0;fi
+     elif [[ "$desired" == healthy && ( "$name" == mariadb-* || "$step" == "$CANARY_PAUSE_STEP_INDEX" ) ]]; then
        oc argo rollouts promote "$name" -n "$NS";continue
      fi
    fi
@@ -82,7 +84,7 @@ case "$cmd" in
      python3 scripts/full-multi-history-reset.py --instance "$INSTANCE" --timeout-seconds "$TIMEOUT_SECONDS"
      echo "PASS: Full-multi $INSTANCE BLUE prepared; history reset"
    else
-     echo "PASS: Full-multi $INSTANCE canaries at manual pause (database preview ready); run promote"
+     echo "PASS: Full-multi $INSTANCE Front/Backend paused at 50% (MariaDB preview ready); run promote"
    fi
    ;;
  promote)
@@ -90,7 +92,13 @@ case "$cmd" in
    for tier in mariadb backend front;do
      name="$tier-$INSTANCE"
      phase="$(oc get rollout "$name" -n "$NS" -o jsonpath='{.status.phase}')"
-     if [[ "$phase" == Paused ]];then oc argo rollouts promote "$name" -n "$NS";fi
+     if [[ "$phase" == Paused ]];then
+       if [[ "$name" != mariadb-* ]];then
+         step="$(oc get rollout "$name" -n "$NS" -o jsonpath='{.status.currentStepIndex}')"
+         [[ "$step" == "$CANARY_PAUSE_STEP_INDEX" ]] || fail "$name paused at step=$step; expected 50% pause step=$CANARY_PAUSE_STEP_INDEX"
+       fi
+       oc argo rollouts promote "$name" -n "$NS"
+     fi
      ready "$name" healthy
    done
    echo "PASS: Full-multi $INSTANCE promoted"
@@ -104,17 +112,24 @@ case "$cmd" in
  traffic)
    require curl
    host="$(oc get route full-multi -n "$NS" -o jsonpath='{.spec.host}')"
+   front_track="${FRONT_TRACK:-stable}"
+   backend_track="${BACKEND_TRACK:-stable}"
+   db_track="${DB_TRACK:-stable}"
+   [[ "$front_track" =~ ^(stable|canary|weighted)$ ]] || fail 'FRONT_TRACK must be stable|canary|weighted'
+   [[ "$backend_track" =~ ^(stable|canary|weighted)$ ]] || fail 'BACKEND_TRACK must be stable|canary|weighted'
+   [[ "$db_track" =~ ^(stable|canary)$ ]] || fail 'DB_TRACK must be stable|canary'
+   headers=(-H "x-app-target: $INSTANCE" -H "x-db-track: $db_track")
+   [[ "$front_track" == weighted ]] || headers+=(-H "x-front-track: $front_track")
+   [[ "$backend_track" == weighted ]] || headers+=(-H "x-backend-track: $backend_track")
    for ((i=1;i<=${REQUESTS:-30};i++));do
      curl -kfsS -o /dev/null -w "request $i: HTTP %{http_code}\n" \
-       -H "x-app-target: $INSTANCE" \
-       -H "x-front-track: ${FRONT_TRACK:-stable}" \
-       -H "x-backend-track: ${BACKEND_TRACK:-stable}" \
-       -H "x-db-track: ${DB_TRACK:-stable}" "https://$host/?page=1&per_page=3"
+       "${headers[@]}" "https://$host/?page=1&per_page=3"
    done
    ;;
  help|-h|--help)
    echo 'Usage: INSTANCE=a|b bash scripts/full-multi.sh validate|deploy|prepare|start|promote|traffic|status'
-   echo 'Set FRONT_TRACK, BACKEND_TRACK, DB_TRACK=stable|canary to route the full path during traffic.'
+   echo 'Set FRONT_TRACK/BACKEND_TRACK=stable|canary|weighted and DB_TRACK=stable|canary.'
+   echo 'weighted omits that tier header and lets Istio enforce 50/50 at the canary pause.'
    ;;
  *)fail "Unknown command $cmd";;
 esac

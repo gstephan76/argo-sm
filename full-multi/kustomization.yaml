@@ -31,3 +31,4 @@ resources:
   - service-mariadb-b-canary.yaml
   - service-mariadb-b-stable.yaml
   - telemetry.yaml
+  - podmonitor-istio-proxies.yaml

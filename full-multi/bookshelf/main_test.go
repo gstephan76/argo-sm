@@ -7,6 +7,27 @@ import (
 	"testing"
 )
 
+func TestPropagateTraceHeaders(t *testing.T) {
+	src := http.Header{}
+	src.Set("Traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
+	src.Set("Tracestate", "vendor=value")
+	src.Set("X-Request-Id", "req-123")
+	src.Set("X-B3-Traceid", "aaaabbbbccccdddd")
+	src.Set("B3", "aaaabbbbccccdddd-1234123412341234-1")
+	src.Add("Baggage", "demo=a")
+	src.Set("Authorization", "Bearer should-not-forward")
+	dst := http.Header{}
+	propagateTraceHeaders(dst, src)
+	for _, name := range []string{"Traceparent", "Tracestate", "X-Request-Id", "X-B3-Traceid", "B3", "Baggage"} {
+		if dst.Get(name) != src.Get(name) {
+			t.Errorf("%s not forwarded: %q", name, dst.Get(name))
+		}
+	}
+	if dst.Get("Authorization") != "" {
+		t.Fatal("credentials must not be copied")
+	}
+}
+
 func TestTracks(t *testing.T) {
 	h := http.Header{}
 	if track(h, "x-db-track") != "stable" {

@@ -26,7 +26,7 @@ def verify():
                 assert '      trafficRouting:' in s and '      steps:' in s
                 assert s.count('- analysis:') == 5, path
                 assert s.count('value: BLUE')==5 or s.count('value: YELLOW')==5, path
-                assert 'ghcr.io/gstephan76/argo-sm-bookshelf:full-multi-v1' in s
+                assert 'ghcr.io/gstephan76/argo-sm-bookshelf:full-multi-tracing-v2' in s
             else:
                 assert '      autoPromotionEnabled: false' in s, path
                 assert '          emptyDir: {}' in s, path
@@ -44,9 +44,11 @@ def verify():
             s=(D/f'rollout-{f}-{app}.yaml').read_text()
             assert f'Application {app.upper()} - ' in s
     script=(D/'bookshelf/main.go').read_text()
-    for name in ('x-backend-track','x-db-track','DB_HOST_CANARY','DB_HOST_STABLE'):
+    for name in ('x-backend-track','x-db-track','DB_HOST_CANARY','DB_HOST_STABLE','traceparent','propagateTraceHeaders'):
         assert name in script,name
-    print('PASS: exactly six Rollouts, twelve track Services, isolated A/B tier and header routing contracts')
+    assert 'otel-tracing' in (D/'telemetry.yaml').read_text()
+    assert (D/'podmonitor-istio-proxies.yaml').is_file()
+    print('PASS: six Rollouts, routing and observability contracts')
 
 def setcolor(color,instance):
     col=color.upper()

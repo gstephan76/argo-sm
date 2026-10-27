@@ -56,6 +56,23 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("/", s.index)
 	return mux
 }
+
+// Istio/Envoy requires the application to forward incoming trace context
+// when it creates a new downstream HTTP request. Do not forward credentials.
+var downstreamTraceHeaders = []string{
+	"x-request-id", "traceparent", "tracestate", "baggage",
+	"b3", "x-b3-traceid", "x-b3-spanid", "x-b3-parentspanid",
+	"x-b3-sampled", "x-b3-flags", "x-ot-span-context",
+}
+
+func propagateTraceHeaders(dst, src http.Header) {
+	for _, name := range downstreamTraceHeaders {
+		for _, value := range src.Values(name) {
+			dst.Add(name, value)
+		}
+	}
+}
+
 func (s *server) upstream(r *http.Request) ([]byte, int, error) {
 	u, err := url.Parse(s.backendURL)
 	if err != nil {
@@ -66,6 +83,7 @@ func (s *server) upstream(r *http.Request) ([]byte, int, error) {
 	if err != nil {
 		return nil, 0, err
 	}
+	propagateTraceHeaders(req.Header, r.Header)
 	for _, h := range []string{"x-backend-track", "x-db-track"} {
 		if v := r.Header.Get(h); v != "" {
 			req.Header.Set(h, v)

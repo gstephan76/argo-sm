@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
         - name: mariadb
-          image: quay.io/sclorg/mariadb-1011-c9s:latest
+          image: ghcr.io/gstephan76/argo-sm-mariadb:classicos-brasileiros-20-v1
           imagePullPolicy: IfNotPresent
           env:
             - name: MYSQL_DATABASE

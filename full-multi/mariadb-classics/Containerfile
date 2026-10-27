@@ -1,0 +1,5 @@
+# MariaDB 10.11 with a first-boot, 20-book Brazilian classics dataset.
+# Keep native SCL entrypoint and OpenShift-compatible USER 27.
+FROM quay.io/sclorg/mariadb-1011-c9s:latest
+COPY --chown=27:0 mysql-init/90-seed-books.sh /opt/app-root/src/mysql-init/90-seed-books.sh
+COPY --chown=27:0 mysql-data/books.sql /opt/app-root/src/mysql-data/books.sql

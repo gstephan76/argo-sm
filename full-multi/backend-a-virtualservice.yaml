@@ -18,7 +18,7 @@ spec:
         - destination:
             host: backend-a-canary
             port:
-              number: 80
+              number: 5000
     - name: backend-a-force-stable
       match:
         - headers:
@@ -28,16 +28,16 @@ spec:
         - destination:
             host: backend-a-stable
             port:
-              number: 80
+              number: 5000
     - name: backend-a-default
       route:
         - destination:
             host: backend-a-stable
             port:
-              number: 80
+              number: 5000
           weight: 100
         - destination:
             host: backend-a-canary
             port:
-              number: 80
+              number: 5000
           weight: 0

@@ -1,0 +1,33 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - analysis-backend-a.yaml
+  - analysis-backend-b.yaml
+  - analysis-front-a.yaml
+  - analysis-front-b.yaml
+  - backend-a-virtualservice.yaml
+  - backend-b-virtualservice.yaml
+  - front-virtualservice.yaml
+  - gateway.yaml
+  - namespace.yaml
+  - rollout-backend-a.yaml
+  - rollout-backend-b.yaml
+  - rollout-front-a.yaml
+  - rollout-front-b.yaml
+  - rollout-mariadb-a.yaml
+  - rollout-mariadb-b.yaml
+  - service-backend-a-canary.yaml
+  - service-backend-a-stable.yaml
+  - service-backend-a.yaml
+  - service-backend-b-canary.yaml
+  - service-backend-b-stable.yaml
+  - service-backend-b.yaml
+  - service-front-a-canary.yaml
+  - service-front-a-stable.yaml
+  - service-front-b-canary.yaml
+  - service-front-b-stable.yaml
+  - service-mariadb-a-canary.yaml
+  - service-mariadb-a-stable.yaml
+  - service-mariadb-b-canary.yaml
+  - service-mariadb-b-stable.yaml
+  - telemetry.yaml

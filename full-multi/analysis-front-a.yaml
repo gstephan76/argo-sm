@@ -1,0 +1,50 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: smoke-front-a
+  namespace: full-multi
+  annotations:
+    argocd.argoproj.io/sync-wave: '1'
+spec:
+  args:
+    - name: expected-color
+  metrics:
+    - name: canary-health
+      count: 1
+      failureLimit: 0
+      provider:
+        job:
+          spec:
+            backoffLimit: 0
+            activeDeadlineSeconds: 90
+            template:
+              metadata:
+                labels:
+                  sidecar.istio.io/inject: 'false'
+              spec:
+                restartPolicy: Never
+                containers:
+                  - name: probe
+                    image: quay.io/curl/curl:8.22.0
+                    command:
+                      - /bin/sh
+                      - -c
+                      - |
+                        set -eu
+                        url=http://front-a-canary.full-multi.svc.cluster.local/info
+                        n=1
+                        while [ "$n" -le 15 ]; do
+                          reply="$(curl -fsS --max-time 8 "$url")"
+                          echo "$reply" | grep -Fq 'Application A - {{args.expected-color}}' || exit 1
+                          curl -fsS --max-time 8 "http://front-a-canary.full-multi.svc.cluster.local/api/books" | grep -Fq '"books"' || exit 1
+                          n=$((n + 1))
+                          sleep 1
+                        done
+                    resources:
+                      requests: {cpu: 5m, memory: 16Mi}
+                      limits: {cpu: 100m, memory: 64Mi}
+                    securityContext:
+                      runAsNonRoot: true
+                      allowPrivilegeEscalation: false
+                      capabilities:
+                        drop: [ALL]

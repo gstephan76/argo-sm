@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mariadb-a-stable
+  namespace: full-multi
+spec:
+  selector:
+    app: mariadb-a
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: 3306

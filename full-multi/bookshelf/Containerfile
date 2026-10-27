@@ -1,0 +1,11 @@
+FROM golang:1.25-alpine AS build
+WORKDIR /src
+COPY go.mod ./
+RUN go mod download
+COPY main.go main_test.go ./
+RUN go test ./... && CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /bookshelf .
+FROM scratch
+COPY --from=build /bookshelf /bookshelf
+USER 10001:10001
+EXPOSE 3000 5000
+ENTRYPOINT ["/bookshelf"]

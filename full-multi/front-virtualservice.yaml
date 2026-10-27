@@ -1,0 +1,81 @@
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: full-multi-front-router
+  namespace: full-multi
+spec:
+  hosts: ["*"]
+  gateways: [full-multi-gateway]
+  http:
+    - name: front-b-force-canary
+      match:
+        - headers:
+            x-app-target:
+              exact: b
+            x-front-track:
+              exact: canary
+      route:
+        - destination:
+            host: front-b-canary
+            port:
+              number: 80
+    - name: front-b-force-stable
+      match:
+        - headers:
+            x-app-target:
+              exact: b
+            x-front-track:
+              exact: stable
+      route:
+        - destination:
+            host: front-b-stable
+            port:
+              number: 80
+    - name: secondary
+      match:
+        - headers:
+            x-app-target:
+              exact: b
+      route:
+        - destination:
+            host: front-b-stable
+            port:
+              number: 80
+          weight: 100
+        - destination:
+            host: front-b-canary
+            port:
+              number: 80
+          weight: 0
+    - name: front-a-force-canary
+      match:
+        - headers:
+            x-front-track:
+              exact: canary
+      route:
+        - destination:
+            host: front-a-canary
+            port:
+              number: 80
+    - name: front-a-force-stable
+      match:
+        - headers:
+            x-front-track:
+              exact: stable
+      route:
+        - destination:
+            host: front-a-stable
+            port:
+              number: 80
+    - name: primary
+      route:
+        - destination:
+            host: front-a-stable
+            port:
+              number: 80
+          weight: 100
+        - destination:
+            host: front-a-canary
+            port:
+              number: 80
+          weight: 0

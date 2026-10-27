@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: front-a-canary
+  namespace: full-multi
+spec:
+  selector:
+    app: front-a
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3000

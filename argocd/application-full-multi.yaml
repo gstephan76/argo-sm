@@ -1,0 +1,46 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: full-multi
+  namespace: openshift-gitops
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/gstephan76/argo-sm.git
+    targetRevision: main
+    path: full-multi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: full-multi
+  ignoreDifferences:
+    - group: ""
+      kind: Service
+      jqPathExpressions:
+        - '.spec.selector."rollouts-pod-template-hash"'
+    - group: networking.istio.io
+      kind: VirtualService
+      name: full-multi-front-router
+      namespace: full-multi
+      jqPathExpressions:
+        - '.spec.http[] | select(.name == "primary") | .route[].weight'
+        - '.spec.http[] | select(.name == "secondary") | .route[].weight'
+    - group: networking.istio.io
+      kind: VirtualService
+      name: backend-a-router
+      namespace: full-multi
+      jqPathExpressions:
+        - '.spec.http[] | select(.name == "backend-a-default") | .route[].weight'
+    - group: networking.istio.io
+      kind: VirtualService
+      name: backend-b-router
+      namespace: full-multi
+      jqPathExpressions:
+        - '.spec.http[] | select(.name == "backend-b-default") | .route[].weight'
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - RespectIgnoreDifferences=true
+      - ApplyOutOfSyncOnly=true

@@ -1,0 +1,43 @@
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: backend-a-router
+  namespace: full-multi
+spec:
+  hosts:
+    - backend-a
+    - backend-a.full-multi.svc.cluster.local
+  gateways: [mesh]
+  http:
+    - name: backend-a-force-canary
+      match:
+        - headers:
+            x-backend-track:
+              exact: canary
+      route:
+        - destination:
+            host: backend-a-canary
+            port:
+              number: 80
+    - name: backend-a-force-stable
+      match:
+        - headers:
+            x-backend-track:
+              exact: stable
+      route:
+        - destination:
+            host: backend-a-stable
+            port:
+              number: 80
+    - name: backend-a-default
+      route:
+        - destination:
+            host: backend-a-stable
+            port:
+              number: 80
+          weight: 100
+        - destination:
+            host: backend-a-canary
+            port:
+              number: 80
+          weight: 0

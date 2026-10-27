@@ -1,0 +1,125 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: backend-b
+  namespace: full-multi
+  annotations:
+    argocd.argoproj.io/sync-wave: '1'
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app: backend-b
+  template:
+    metadata:
+      annotations:
+        demo-rollout-revision: baseline-blue
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '15090'
+        prometheus.io/path: /stats/prometheus
+      labels:
+        app: backend-b
+        app.kubernetes.io/name: full-multi-bookshelf
+        sidecar.istio.io/inject: 'true'
+    spec:
+      containers:
+        - name: bookshelf-backend
+          image: ghcr.io/gstephan76/argo-sm-bookshelf:full-multi-v1
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: APP_ID
+              value: "B"
+            - name: ROLE
+              value: "backend"
+            - name: MESSAGE_PREFIX
+              value: "Application B - BLUE"
+            - name: DB_HOST_STABLE
+              value: mariadb-b-stable.full-multi.svc.cluster.local
+            - name: DB_HOST_CANARY
+              value: mariadb-b-canary.full-multi.svc.cluster.local
+            - name: DB_NAME
+              value: bookdb
+            - name: DB_USER
+              value: bookapp
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials-b
+                  key: password
+          ports:
+            - name: http
+              containerPort: 5000
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+  strategy:
+    canary:
+      maxUnavailable: 0
+      maxSurge: 1
+      stableService: backend-b-stable
+      canaryService: backend-b-canary
+      trafficRouting:
+        istio:
+          virtualService:
+            name: backend-b-router
+            routes:
+              - backend-b-default
+      steps:
+        - setWeight: 10
+        - analysis:
+            templates:
+              - templateName: smoke-backend-b
+            args:
+              - name: expected-color
+                value: BLUE
+        - setWeight: 25
+        - analysis:
+            templates:
+              - templateName: smoke-backend-b
+            args:
+              - name: expected-color
+                value: BLUE
+        - setWeight: 50
+        - analysis:
+            templates:
+              - templateName: smoke-backend-b
+            args:
+              - name: expected-color
+                value: BLUE
+        - setWeight: 75
+        - analysis:
+            templates:
+              - templateName: smoke-backend-b
+            args:
+              - name: expected-color
+                value: BLUE
+        - setWeight: 100
+        - analysis:
+            templates:
+              - templateName: smoke-backend-b
+            args:
+              - name: expected-color
+                value: BLUE
+        - pause: {}

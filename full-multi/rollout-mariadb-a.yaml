@@ -1,0 +1,80 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: mariadb-a
+  namespace: full-multi
+  annotations:
+    argocd.argoproj.io/sync-wave: '1'
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app: mariadb-a
+  template:
+    metadata:
+      annotations:
+        demo-rollout-revision: baseline-blue
+      labels:
+        app: mariadb-a
+        app.kubernetes.io/name: full-multi-mariadb
+        sidecar.istio.io/inject: 'true'
+    spec:
+      containers:
+        - name: mariadb
+          image: quay.io/sclorg/mariadb-1011-c9s:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: MYSQL_DATABASE
+              value: bookdb
+            - name: MYSQL_USER
+              value: bookapp
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials-a
+                  key: password
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials-a
+                  key: root-password
+          ports:
+            - name: mysql
+              containerPort: 3306
+          volumeMounts:
+            - name: mariadb-data
+              mountPath: /var/lib/mysql/data
+          readinessProbe:
+            tcpSocket:
+              port: mysql
+            initialDelaySeconds: 20
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: mysql
+            initialDelaySeconds: 45
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 384Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            seccompProfile:
+              type: RuntimeDefault
+      volumes:
+        - name: mariadb-data
+          emptyDir: {}
+  strategy:
+    blueGreen:
+      activeService: mariadb-a-stable
+      previewService: mariadb-a-canary
+      autoPromotionEnabled: false
+      scaleDownDelaySeconds: 45

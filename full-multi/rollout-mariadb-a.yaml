@@ -14,7 +14,7 @@ spec:
   template:
     metadata:
       annotations:
-        demo-rollout-revision: candidate-yellow-20261027T205520Z
+        demo-rollout-revision: baseline-blue
       labels:
         app: mariadb-a
         app.kubernetes.io/name: full-multi-mariadb

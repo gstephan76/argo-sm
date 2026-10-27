@@ -14,7 +14,7 @@ spec:
   template:
     metadata:
       annotations:
-        demo-rollout-revision: candidate-yellow-20261027T205520Z
+        demo-rollout-revision: baseline-blue
         prometheus.io/scrape: 'true'
         prometheus.io/port: '15090'
         prometheus.io/path: /stats/prometheus
@@ -33,7 +33,7 @@ spec:
             - name: ROLE
               value: "backend"
             - name: MESSAGE_PREFIX
-              value: "Application A - YELLOW"
+              value: "Application A - BLUE"
             - name: CRUD_API_URL
               value: "http://crud-a.full-multi.svc.cluster.local:8080/api/books"
           ports:
@@ -82,19 +82,19 @@ spec:
               - templateName: smoke-backend-a
             args:
               - name: expected-color
-                value: YELLOW
+                value: BLUE
         - setWeight: 25
         - analysis:
             templates:
               - templateName: smoke-backend-a
             args:
               - name: expected-color
-                value: YELLOW
+                value: BLUE
         - setWeight: 50
         - analysis:
             templates:
               - templateName: smoke-backend-a
             args:
               - name: expected-color
-                value: YELLOW
+                value: BLUE
         - pause: {}

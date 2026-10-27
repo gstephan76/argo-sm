@@ -31,12 +31,12 @@ spec:
                       - -c
                       - |
                         set -eu
-                        url=http://backend-b-canary.full-multi.svc.cluster.local/info
+                        url=http://backend-b-canary.full-multi.svc.cluster.local:5000/info
                         n=1
                         while [ "$n" -le 15 ]; do
                           reply="$(curl -fsS --max-time 8 "$url")"
                           echo "$reply" | grep -Fq 'Application B - {{args.expected-color}}' || exit 1
-                          curl -fsS --max-time 8 "http://backend-b-canary.full-multi.svc.cluster.local/api/books" | grep -Fq '"books"' || exit 1
+                          curl -fsS --max-time 8 "http://backend-b-canary.full-multi.svc.cluster.local:5000/api/books" | grep -Fq '"books"' || exit 1
                           n=$((n + 1))
                           sleep 1
                         done

@@ -14,7 +14,7 @@ spec:
   template:
     metadata:
       annotations:
-        demo-rollout-revision: baseline-blue
+        demo-rollout-revision: candidate-yellow-20261027T205520Z
         prometheus.io/scrape: 'true'
         prometheus.io/port: '15090'
         prometheus.io/path: /stats/prometheus
@@ -33,7 +33,7 @@ spec:
             - name: ROLE
               value: "backend"
             - name: MESSAGE_PREFIX
-              value: "Application A - BLUE"
+              value: "Application A - YELLOW"
             - name: DB_HOST_STABLE
               value: mariadb-a-stable.full-multi.svc.cluster.local
             - name: DB_HOST_CANARY
@@ -93,19 +93,19 @@ spec:
               - templateName: smoke-backend-a
             args:
               - name: expected-color
-                value: BLUE
+                value: YELLOW
         - setWeight: 25
         - analysis:
             templates:
               - templateName: smoke-backend-a
             args:
               - name: expected-color
-                value: BLUE
+                value: YELLOW
         - setWeight: 50
         - analysis:
             templates:
               - templateName: smoke-backend-a
             args:
               - name: expected-color
-                value: BLUE
+                value: YELLOW
         - pause: {}

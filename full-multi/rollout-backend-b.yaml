@@ -17,7 +17,7 @@ spec:
   template:
     metadata:
       annotations:
-        demo-rollout-revision: baseline-blue-release-theme-v2
+        demo-rollout-revision: baseline-blue
         prometheus.io/scrape: 'true'
         prometheus.io/port: '15090'
         prometheus.io/path: /stats/prometheus

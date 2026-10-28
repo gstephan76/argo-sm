@@ -38,7 +38,7 @@ spec:
             - name: MESSAGE_PREFIX
               value: "Application B - BLUE"
             - name: CRUD_API_URL
-              value: "http://crud-b.full-multi.svc.cluster.local:8080/api/books"
+              value: "http://crud-b-blue.full-multi.svc.cluster.local:8080/api/books"
           ports:
             - name: http
               containerPort: 5000

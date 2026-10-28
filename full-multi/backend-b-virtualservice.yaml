@@ -6,6 +6,7 @@ metadata:
 spec:
   hosts:
     - backend-b.full-multi.svc.cluster.local
+    - backend-b-stable.full-multi.svc.cluster.local
   gateways: [mesh]
   http:
     - name: backend-b-force-canary

@@ -6,6 +6,7 @@ import re
 ROOT=Path(__file__).resolve().parent.parent
 D=ROOT/'full-multi'
 TIERS=('front','backend','mariadb')
+SERVICE_CLEANUP_PHASE = 'migrate'
 MARIA_BLUE_IMAGE='ghcr.io/gstephan76/argo-sm-mariadb:english-literature-20-v1'
 MARIA_GREEN_IMAGE='ghcr.io/gstephan76/argo-sm-mariadb:classicos-brasileiros-20-v1'
 
@@ -64,7 +65,7 @@ def verify():
         assert '            - name: DB_PASSWORD' in r
         assert 'ghcr.io/gstephan76/argo-sm-bookshelf:full-multi-crud-v3' in r
         b=(D/f'rollout-backend-{app}.yaml').read_text()
-        assert f'http://crud-{app}.full-multi.svc.cluster.local:8080/api/books' in b
+        assert f'http://crud-{app}-blue.full-multi.svc.cluster.local:8080/api/books' in b
         assert '            - name: DB_PASSWORD' not in b
         vs=(D/f'crud-{app}-virtualservice.yaml').read_text()
         for needle in ('x-db-track:', 'exact: green', 'exact: canary',
@@ -91,6 +92,28 @@ def verify():
         assert name in script,name
     assert 'otel-tracing' in (D/'telemetry.yaml').read_text()
     assert (D/'podmonitor-istio-proxies.yaml').is_file()
+    # Verify a deliberate, bounded Service topology and updated in-mesh URLs.
+    for app in 'ab':
+        for tier, suffixes in (
+            ('front', ('-stable', '-canary')),
+            ('backend', ('', '-stable', '-canary') if SERVICE_CLEANUP_PHASE == 'migrate' else ('-stable', '-canary')),
+            ('crud', ('', '-blue', '-green') if SERVICE_CLEANUP_PHASE == 'migrate' else ('-blue', '-green')),
+            ('mariadb', ('-stable', '-canary')),
+        ):
+            actual = {p.name for p in D.glob(f'service-{tier}-{app}*.yaml')}
+            expected = {f'service-{tier}-{app}{suffix}.yaml' for suffix in suffixes}
+            assert actual == expected, (tier, app, actual, expected)
+        front = (D / f'rollout-front-{app}.yaml').read_text()
+        backend = (D / f'rollout-backend-{app}.yaml').read_text()
+        assert f'http://backend-{app}-stable.full-multi.svc.cluster.local:5000/api/books' in front
+        assert f'http://crud-{app}-blue.full-multi.svc.cluster.local:8080/api/books' in backend
+        for tier, final_suffix in (('backend', 'stable'), ('crud', 'blue')):
+            vs = (D / f'{tier}-{app}-virtualservice.yaml').read_text()
+            new_host = f'{tier}-{app}-{final_suffix}.full-multi.svc.cluster.local'
+            old_host = f'{tier}-{app}.full-multi.svc.cluster.local'
+            hosts_part = vs.split('  hosts:\n', 1)[1].split('  gateways:', 1)[0]
+            assert f'    - {new_host}\n' in hosts_part, (tier, app, new_host)
+            assert (f'    - {old_host}\n' in hosts_part) == (SERVICE_CLEANUP_PHASE == 'migrate'), (tier, app, old_host)
     print('PASS: eight Rollouts, CRUD DB routing and observability contracts')
 
 def setcolor(color,instance):

@@ -38,7 +38,7 @@ spec:
             - name: MESSAGE_PREFIX
               value: "Application A - YELLOW"
             - name: BACKEND_API_URL
-              value: "http://backend-a.full-multi.svc.cluster.local:5000/api/books"
+              value: "http://backend-a-stable.full-multi.svc.cluster.local:5000/api/books"
           ports:
             - name: http
               containerPort: 3000

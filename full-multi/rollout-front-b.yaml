@@ -17,7 +17,7 @@ spec:
   template:
     metadata:
       annotations:
-        demo-rollout-revision: baseline-blue
+        demo-rollout-revision: baseline-blue-release-theme-v2
         prometheus.io/scrape: 'true'
         prometheus.io/port: '15090'
         prometheus.io/path: /stats/prometheus
@@ -26,10 +26,18 @@ spec:
         app.kubernetes.io/name: full-multi-bookshelf
         sidecar.istio.io/inject: 'true'
     spec:
+      volumes:
+        - name: release-theme
+          configMap:
+            name: bookshelf-release-theme
       containers:
         - name: bookshelf-front
-          image: ghcr.io/gstephan76/argo-sm-bookshelf:full-multi-crud-v3
+          image: ghcr.io/gstephan76/argo-sm-bookshelf:full-multi-release-theme-v2
           imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: release-theme
+              mountPath: /etc/bookshelf-theme
+              readOnly: true
           env:
             - name: APP_ID
               value: "B"

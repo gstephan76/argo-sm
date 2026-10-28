@@ -1,6 +1,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+  - configmap-release-theme.yaml
   - analysis-backend-a.yaml
   - analysis-backend-b.yaml
   - analysis-front-a.yaml

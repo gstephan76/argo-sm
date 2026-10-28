@@ -37,7 +37,7 @@ def verify():
                 assert steps.rstrip().endswith('- pause: {}'),path
                 assert steps.count('        - pause: {}')==1,path
                 assert s.count('value: BLUE')==3 or s.count('value: YELLOW')==3,path
-                assert 'ghcr.io/gstephan76/argo-sm-bookshelf:full-multi-crud-v3' in s
+                assert 'ghcr.io/gstephan76/argo-sm-bookshelf:full-multi-release-theme-v2' in s
             else:
                 assert '      autoPromotionEnabled: false' in s, path
                 assert '          emptyDir: {}' in s, path

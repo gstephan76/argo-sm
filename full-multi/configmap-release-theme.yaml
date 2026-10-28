@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bookshelf-release-theme
+  namespace: full-multi
+  annotations:
+    argocd.argoproj.io/sync-wave: '-1'
+data:
+  theme.json: |
+    {
+      "blue": {
+        "label": "BLUE RELEASE",
+        "subtitle": "Baseline software revision",
+        "accent": "#1755c9",
+        "surface": "#e7efff",
+        "ink": "#123782"
+      },
+      "yellow": {
+        "label": "YELLOW RELEASE",
+        "subtitle": "Candidate software revision",
+        "accent": "#d08b00",
+        "surface": "#fff5d8",
+        "ink": "#6a4800"
+      }
+    }

@@ -65,9 +65,10 @@ selected by environment variables. MariaDB uses a separate database image.
 
 The deployment declares **eight Rollouts**: four HTTP canaries, two CRUD
 rolling-update Rollouts and two database blue-green Rollouts. Each has `-stable` and `-canary` Services (12 track Services).
-Two backend anchor Services (`backend-a` and `backend-b`) provide
-stable DNS names to which the internal Istio VirtualServices apply. Together
-with the gateway Service and six CRUD Services, there are **21 Services** in the manifests.
+The Backend VirtualServices use `backend-{a,b}-stable` as their mesh routing
+host, and the CRUD VirtualServices use `crud-{a,b}-blue`. Each Rollout
+has exactly two track Services; including the gateway, there are
+**17 Services** in the manifests.
 
 Other shared resources include `Route/full-multi`,
 `Deployment/full-multi-ingressgateway`, `Gateway/full-multi-gateway`,

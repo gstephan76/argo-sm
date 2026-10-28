@@ -7,7 +7,7 @@ one per application. The complete request path is:
 → CRUD A/B → MariaDB A/B active(BLUE) or preview(GREEN)`.
 
 - The Front continues to forward `x-backend-track` and `x-db-track`.
-- The Backend forwards HTTP `/api/books` to the A/B CRUD anchor Service. It has
+- The Backend forwards HTTP `/api/books` to the `crud-{a,b}-blue` Service, which serves as the in-mesh routing host. It has
   **no database credentials** and makes no SQL connections. It preserves the
   public JSON `backend` identity by stamping its own BLUE/YELLOW prefix.
 - `crud-{a,b}-router` (internal `gateways: [mesh]`) inspects `x-db-track`.

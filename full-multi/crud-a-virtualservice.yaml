@@ -9,7 +9,6 @@ metadata:
   namespace: full-multi
 spec:
   hosts:
-    - crud-a.full-multi.svc.cluster.local
     - crud-a-blue.full-multi.svc.cluster.local
   gateways: [mesh]
   http:

@@ -6,7 +6,7 @@ import re
 ROOT=Path(__file__).resolve().parent.parent
 D=ROOT/'full-multi'
 TIERS=('front','backend','mariadb')
-SERVICE_CLEANUP_PHASE = 'migrate'
+SERVICE_CLEANUP_PHASE = 'finalize'
 MARIA_BLUE_IMAGE='ghcr.io/gstephan76/argo-sm-mariadb:english-literature-20-v1'
 MARIA_GREEN_IMAGE='ghcr.io/gstephan76/argo-sm-mariadb:classicos-brasileiros-20-v1'
 
@@ -73,7 +73,7 @@ def verify():
                        f'crud-{app}-green.full-multi.svc.cluster.local',
                        f'crud-{app}-blue.full-multi.svc.cluster.local'):
             assert needle in vs, (app, needle)
-        for suffix in ('', '-blue', '-green'):
+        for suffix in ('-blue', '-green'):
             s=(D/f'service-crud-{app}{suffix}.yaml').read_text()
             assert f'  name: crud-{app}{suffix}\n' in s
             assert f'    app: crud-{app}\n' in s

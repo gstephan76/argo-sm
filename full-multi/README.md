@@ -72,7 +72,7 @@ has exactly two track Services; including the gateway, there are
 
 Other shared resources include `Route/full-multi`,
 `Deployment/full-multi-ingressgateway`, `Gateway/full-multi-gateway`,
-`VirtualService/full-multi-front-router`, two internal backend VirtualServices,
+`VirtualService/full-multi-front-router` (delegation root), two Frontend delegate VirtualServices (`front-a-router`, `front-b-router`), two internal backend VirtualServices,
 four HTTP `AnalysisTemplate` resources, the two CRUD VirtualServices, and `Telemetry/full-multi-tracing`.
 
 ## 2. Request routing with HTTP headers

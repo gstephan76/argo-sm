@@ -3,79 +3,21 @@ kind: VirtualService
 metadata:
   name: full-multi-front-router
   namespace: full-multi
+  annotations:
+    argocd.argoproj.io/sync-wave: '0'
 spec:
   hosts: ["*"]
   gateways: [full-multi-gateway]
   http:
-    - name: front-b-force-canary
+    # Must come first; requests for B are never handled by default A.
+    - name: application-b
       match:
         - headers:
             x-app-target:
               exact: b
-            x-front-track:
-              exact: canary
-      route:
-        - destination:
-            host: front-b-canary
-            port:
-              number: 80
-    - name: front-b-force-stable
-      match:
-        - headers:
-            x-app-target:
-              exact: b
-            x-front-track:
-              exact: stable
-      route:
-        - destination:
-            host: front-b-stable
-            port:
-              number: 80
-    - name: secondary
-      match:
-        - headers:
-            x-app-target:
-              exact: b
-      route:
-        - destination:
-            host: front-b-stable
-            port:
-              number: 80
-          weight: 100
-        - destination:
-            host: front-b-canary
-            port:
-              number: 80
-          weight: 0
-    - name: front-a-force-canary
-      match:
-        - headers:
-            x-front-track:
-              exact: canary
-      route:
-        - destination:
-            host: front-a-canary
-            port:
-              number: 80
-    - name: front-a-force-stable
-      match:
-        - headers:
-            x-front-track:
-              exact: stable
-      route:
-        - destination:
-            host: front-a-stable
-            port:
-              number: 80
-    - name: primary
-      route:
-        - destination:
-            host: front-a-stable
-            port:
-              number: 80
-          weight: 100
-        - destination:
-            host: front-a-canary
-            port:
-              number: 80
-          weight: 0
+      delegate:
+        name: front-b-router
+    # Preserve old semantics: absent/unknown x-app-target selects A.
+    - name: application-a-default
+      delegate:
+        name: front-a-router

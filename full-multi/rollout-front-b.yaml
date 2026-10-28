@@ -83,7 +83,7 @@ spec:
       trafficRouting:
         istio:
           virtualService:
-            name: full-multi-front-router
+            name: front-b-router
             routes:
               - secondary
       steps:

@@ -7,7 +7,7 @@ ROOT=Path(__file__).resolve().parent.parent
 D=ROOT/'full-multi'
 TIERS=('front','backend','mariadb')
 SERVICE_CLEANUP_PHASE = 'finalize'
-FRONT_DELEGATION_PHASE = 'stage'
+FRONT_DELEGATION_PHASE = 'active'
 MARIA_BLUE_IMAGE='ghcr.io/gstephan76/argo-sm-mariadb:english-literature-20-v1'
 MARIA_GREEN_IMAGE='ghcr.io/gstephan76/argo-sm-mariadb:classicos-brasileiros-20-v1'
 

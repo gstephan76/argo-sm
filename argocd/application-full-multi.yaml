@@ -31,13 +31,6 @@ spec:
         - '.spec.http[] | select(.name == "secondary") | .route[].weight'
     - group: networking.istio.io
       kind: VirtualService
-      name: full-multi-front-router
-      namespace: full-multi
-      jqPathExpressions:
-        - '.spec.http[] | select(.name == "primary") | .route[].weight'
-        - '.spec.http[] | select(.name == "secondary") | .route[].weight'
-    - group: networking.istio.io
-      kind: VirtualService
       name: backend-a-router
       namespace: full-multi
       jqPathExpressions:

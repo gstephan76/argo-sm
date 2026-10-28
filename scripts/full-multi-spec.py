@@ -19,6 +19,7 @@ def verify():
             s=path.read_text()
             assert f'  name: {tier}-{app}\n' in s, path
             assert '  replicas: 1\n' in s, path
+            assert '  analysis:\n    successfulRunHistoryLimit: 2\n    unsuccessfulRunHistoryLimit: 2\n' in s, path
             assert '    matchLabels:' in s
             assert '        demo-rollout-revision:' in s
             assert (f'{tier}-{app}-stable' in s and f'{tier}-{app}-canary' in s)
@@ -44,6 +45,7 @@ def verify():
         r=(D/f'rollout-crud-{app}.yaml').read_text()
         assert f'  name: crud-{app}\n' in r
         assert '  replicas: 1\n' in r
+        assert '  analysis:\n    successfulRunHistoryLimit: 2\n    unsuccessfulRunHistoryLimit: 2\n' in r
         assert '    canary:\n' in r and '      maxSurge: 1' in r
         assert '      maxUnavailable: 0' in r
         assert '            - name: ROLE\n              value: crud' in r

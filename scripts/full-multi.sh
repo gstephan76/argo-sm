@@ -77,11 +77,18 @@ case "$cmd" in
    python3 scripts/full-multi-spec.py verify
    require oc
    oc get application "$APP" -n "$ARGOCD_NS" >/dev/null || fail 'Run deploy first'
-   if [[ "$cmd" == prepare ]];then commit_stage blue;else commit_stage yellow;fi
+   if [[ "$cmd" == prepare ]];then
+     # Retire only superseded revisions; preserve live BLUE/GREEN and pending analysis.
+     python3 scripts/full-multi-history-prune.py --instance "$INSTANCE"
+     commit_stage blue
+   else
+     commit_stage yellow
+   fi
    sync_git
    for tier in mariadb backend front;do ready "$tier-$INSTANCE" "$([[ "$cmd" == prepare ]] && echo healthy || echo paused)";done
    if [[ "$cmd" == prepare ]];then
      python3 scripts/full-multi-history-reset.py --instance "$INSTANCE" --timeout-seconds "$TIMEOUT_SECONDS"
+     python3 scripts/full-multi-history-prune.py --instance "$INSTANCE" --tier crud
      echo "PASS: Full-multi $INSTANCE BLUE prepared; history reset"
    else
      echo "PASS: Full-multi $INSTANCE Front/Backend paused at 50% (MariaDB preview ready); run promote"
@@ -102,6 +109,10 @@ case "$cmd" in
      ready "$name" healthy
    done
    echo "PASS: Full-multi $INSTANCE promoted"
+   ;;
+ cleanup)
+   require oc
+   python3 scripts/full-multi-history-prune.py --instance "$INSTANCE" "${@:2}"
    ;;
  status)
    oc get rollouts.argoproj.io -n "$NS"
@@ -127,7 +138,7 @@ case "$cmd" in
    done
    ;;
  help|-h|--help)
-   echo 'Usage: INSTANCE=a|b bash scripts/full-multi.sh validate|deploy|prepare|start|promote|traffic|status'
+   echo 'Usage: INSTANCE=a|b bash scripts/full-multi.sh validate|deploy|prepare|start|promote|cleanup|traffic|status'
    echo 'Set FRONT_TRACK/BACKEND_TRACK=stable|canary|weighted and DB_TRACK=blue|green (or stable|canary).'
    echo 'weighted omits that tier header and lets Istio enforce 50/50 at the canary pause.'
    ;;

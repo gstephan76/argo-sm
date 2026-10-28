@@ -1,0 +1,42 @@
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: front-b-router
+  namespace: full-multi
+  annotations:
+    argocd.argoproj.io/sync-wave: '-1'
+# A delegate MUST NOT specify hosts or gateways. The root owns ingress.
+spec:
+  http:
+    - name: front-b-force-canary
+      match:
+        - headers:
+            x-front-track:
+              exact: canary
+      route:
+        - destination:
+            host: front-b-canary
+            port:
+              number: 80
+    - name: front-b-force-stable
+      match:
+        - headers:
+            x-front-track:
+              exact: stable
+      route:
+        - destination:
+            host: front-b-stable
+            port:
+              number: 80
+    - name: secondary
+      route:
+        - destination:
+            host: front-b-stable
+            port:
+              number: 80
+          weight: 50
+        - destination:
+            host: front-b-canary
+            port:
+              number: 80
+          weight: 50

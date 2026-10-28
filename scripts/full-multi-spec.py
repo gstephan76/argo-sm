@@ -7,6 +7,7 @@ ROOT=Path(__file__).resolve().parent.parent
 D=ROOT/'full-multi'
 TIERS=('front','backend','mariadb')
 SERVICE_CLEANUP_PHASE = 'finalize'
+FRONT_DELEGATION_PHASE = 'stage'
 MARIA_BLUE_IMAGE='ghcr.io/gstephan76/argo-sm-mariadb:english-literature-20-v1'
 MARIA_GREEN_IMAGE='ghcr.io/gstephan76/argo-sm-mariadb:classicos-brasileiros-20-v1'
 
@@ -77,9 +78,29 @@ def verify():
             s=(D/f'service-crud-{app}{suffix}.yaml').read_text()
             assert f'  name: crud-{app}{suffix}\n' in s
             assert f'    app: crud-{app}\n' in s
-    a=(D/'front-virtualservice.yaml').read_text()
-    for name in ('primary','secondary','front-b-force-canary','front-a-force-canary','x-app-target','x-front-track'):
-        assert name in a, name
+    # Frontend ingress delegation: root selects A/B, delegates own traffic.
+    root=(D/'front-virtualservice.yaml').read_text()
+    for app, route in (('a','primary'),('b','secondary')):
+        delegate=(D/f'front-{app}-router.yaml').read_text()
+        for key in (f'front-{app}-force-stable', f'front-{app}-force-canary',
+                    f'front-{app}-stable', f'front-{app}-canary', route, 'x-front-track'):
+            assert key in delegate, (app,key)
+        assert '  hosts:' not in delegate and '  gateways:' not in delegate
+        weights=re.search(r'(?m)^    - name: '+route+r'\n(.*?)(?=^    - name: |\Z)',delegate,re.S|re.M)
+        assert weights, (app,'missing weighted route')
+        pairs=[int(w) for w in re.findall(r'(?m)^          weight: (\d+)$',weights.group(1))]
+        assert len(pairs)==2 and sum(pairs)==100, (app,'weights',pairs)
+        front=(D/f'rollout-front-{app}.yaml').read_text()
+        expected_vs='full-multi-front-router' if FRONT_DELEGATION_PHASE=='stage' else f'front-{app}-router'
+        assert re.search(r'(?m)^            name: '+expected_vs+r'$',front), (app,expected_vs)
+    if FRONT_DELEGATION_PHASE=='stage':
+        assert 'name: front-a-force-canary' in root and 'name: front-b-force-canary' in root
+        assert 'delegate:' not in root
+    else:
+        assert 'name: application-b' in root and 'name: application-a-default' in root
+        assert 'x-app-target:' in root
+        assert 'name: front-a-router' in root and 'name: front-b-router' in root
+        assert 'name: primary' not in root and 'name: secondary' not in root
     for app in 'ab':
         a=(D/f'backend-{app}-virtualservice.yaml').read_text()
         for name in (f'backend-{app}-default','x-backend-track',f'backend-{app}-canary'):

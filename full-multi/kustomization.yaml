@@ -10,6 +10,8 @@ resources:
   - backend-b-virtualservice.yaml
   - crud-a-virtualservice.yaml
   - crud-b-virtualservice.yaml
+  - front-a-router.yaml
+  - front-b-router.yaml
   - front-virtualservice.yaml
   - gateway.yaml
   - namespace.yaml

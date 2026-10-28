@@ -19,6 +19,18 @@ spec:
         - '.spec.selector."rollouts-pod-template-hash"'
     - group: networking.istio.io
       kind: VirtualService
+      name: front-a-router
+      namespace: full-multi
+      jqPathExpressions:
+        - '.spec.http[] | select(.name == "primary") | .route[].weight'
+    - group: networking.istio.io
+      kind: VirtualService
+      name: front-b-router
+      namespace: full-multi
+      jqPathExpressions:
+        - '.spec.http[] | select(.name == "secondary") | .route[].weight'
+    - group: networking.istio.io
+      kind: VirtualService
       name: full-multi-front-router
       namespace: full-multi
       jqPathExpressions:

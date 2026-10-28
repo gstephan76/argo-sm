@@ -11,6 +11,7 @@ import json
 import re
 import subprocess
 import sys
+from full_multi_oc import run_oc
 from datetime import datetime, timezone
 
 NS = 'full-multi'
@@ -19,9 +20,7 @@ TIERS = ('mariadb', 'backend', 'front', 'crud')
 
 
 def oc(*args):
-    return subprocess.check_output(
-        ['oc', '--request-timeout=12s', *args], text=True, timeout=35
-    )
+    return run_oc(*args)
 
 
 def get(kind, name=None):

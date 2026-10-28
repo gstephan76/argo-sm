@@ -3,7 +3,7 @@
 import argparse,json,subprocess,time,sys
 NAMESPACE='full-multi'
 FINAL={'Successful','Failed','Inconclusive','Error'}
-def run_oc(*args):return subprocess.check_output(['oc','--request-timeout=12s',*args],text=True,timeout=25)
+from full_multi_oc import run_oc
 def get(kind,name=None):return json.loads(run_oc('get',kind,*([name] if name else []),'-n',NAMESPACE,'-o','json'))
 def owned(o,n,uid):return any(x.get('kind')=='Rollout' and x.get('name')==n and x.get('uid')==uid for x in o.get('metadata',{}).get('ownerReferences',[]))
 def cleanup_one(tier,app,deadline,dry_run):

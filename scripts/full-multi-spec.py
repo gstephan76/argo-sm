@@ -6,6 +6,8 @@ import re
 ROOT=Path(__file__).resolve().parent.parent
 D=ROOT/'full-multi'
 TIERS=('front','backend','mariadb')
+MARIA_BLUE_IMAGE='ghcr.io/gstephan76/argo-sm-mariadb:english-literature-20-v1'
+MARIA_GREEN_IMAGE='ghcr.io/gstephan76/argo-sm-mariadb:classicos-brasileiros-20-v1'
 
 def verify():
     expected=sorted(p.name for p in D.glob('*.yaml') if p.name != 'kustomization.yaml')
@@ -39,6 +41,16 @@ def verify():
                 assert '      autoPromotionEnabled: false' in s, path
                 assert '          emptyDir: {}' in s, path
                 assert 'activeService:' in s and 'previewService:' in s, path
+                db_marker=re.search(r'^        demo-rollout-revision: (\S+)$',s,re.M)
+                if not db_marker:
+                    raise SystemExit(f'{path}: missing MariaDB revision marker')
+                if db_marker.group(1)=='baseline-blue':
+                    expected_db_image=MARIA_BLUE_IMAGE
+                elif db_marker.group(1).startswith('candidate-yellow-'):
+                    expected_db_image=MARIA_GREEN_IMAGE
+                else:
+                    raise SystemExit(f'{path}: unknown MariaDB revision marker: {db_marker.group(1)}')
+                assert f'          image: {expected_db_image}\n' in s, (path,expected_db_image)
             names.append(f'{tier}-{app}')
     assert len(names)==len(set(names))==6  # three demo lifecycle Rollouts per A/B
     for app in 'ab':
@@ -94,6 +106,11 @@ def setcolor(color,instance):
             if n!=1:raise SystemExit(f'missing single MESSAGE_PREFIX in {p}')
             s,n=re.subn(r'(                value: )(BLUE|YELLOW)$',lambda m:m[1]+col,s,flags=re.M)
             if n!=3:raise SystemExit(f'missing three analysis colors in {p}')
+        else:
+            db_image=MARIA_BLUE_IMAGE if color=='blue' else MARIA_GREEN_IMAGE
+            s,n=re.subn(r'(^          image: )ghcr\.io/gstephan76/argo-sm-mariadb:[^\s]+$',
+                        lambda m: m[1]+db_image,s,flags=re.M)
+            if n!=1:raise SystemExit(f'missing MariaDB image reference in {p}')
         p.write_text(s)
     verify();print(f'Set {instance.upper()} to {col} marker={marker}')
 if __name__=='__main__':

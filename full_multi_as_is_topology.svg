@@ -1,0 +1,161 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2300 1455" width="2300" height="1455">
+<defs>
+<linearGradient id="bg" x1="0" x2="0.7" y1="0" y2="1"><stop offset="0" stop-color="#121e31"/><stop offset="0.55" stop-color="#1d3656"/><stop offset="1" stop-color="#24456c"/></linearGradient>
+<linearGradient id="panel" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#152840"/><stop offset="1" stop-color="#142237"/></linearGradient>
+<marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M 0 0 L 8 3 L 0 6 z" fill="#c5e6fa"/></marker>
+<filter id="shadow" x="-20%" y="-20%" width="140%" height="145%"><feDropShadow dx="0" dy="5" stdDeviation="8" flood-color="#050a17" flood-opacity=".5"/></filter>
+</defs>
+<rect x="4" y="4" width="2292" height="1447" rx="65" fill="url(#bg)" stroke="#6387ac" stroke-width="3" />
+<text x="70" y="73" text-anchor="start" font-family="DejaVu Sans,Arial,sans-serif" font-size="40" font-weight="750" fill="#fff" >full-multi  •  AS-IS topology</text>
+<text x="2220" y="71" text-anchor="end" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" font-weight="500" fill="#b9cde5" >OpenShift + Istio + Argo Rollouts</text>
+<rect x="60" y="104" width="2180" height="157" rx="25" fill="#10223a" stroke="#5b7fa3" stroke-width="2" />
+<rect x="82" y="134" width="302" height="86" rx="13" fill="#293c57" stroke="#79a7d3" stroke-width="2" />
+<text x="233.0" y="173.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="25" font-weight="700" fill="#EAF2FF" >OpenShift Route</text>
+<text x="233.0" y="199.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="18" font-weight="500" fill="#C8DAE9" >full-multi  •  TLS edge</text>
+<rect x="438" y="134" width="371" height="86" rx="13" fill="#57302f" stroke="#e48f7e" stroke-width="2" />
+<text x="623.5" y="173.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="23" font-weight="700" fill="#EAF2FF" >Istio ingress gateway</text>
+<text x="623.5" y="199.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="500" fill="#C8DAE9" >full-multi-ingressgateway</text>
+<rect x="860" y="124" width="808" height="108" rx="13" fill="#302850" stroke="#a698f5" stroke-width="2" />
+<text x="1264.0" y="174.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="26" font-weight="700" fill="#EAF2FF" >Root VirtualService  •  full-multi-front-router</text>
+<text x="1264.0" y="200.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="19" font-weight="500" fill="#C8DAE9" >front-virtualservice.yaml  •  x-app-target: b → APP B; default → APP A</text>
+<path d="M 388,176 L 432,176" fill="none" stroke="#c5e6fa" stroke-width="4" marker-end="url(#arr)"/>
+<path d="M 811,176 L 853,176" fill="none" stroke="#c5e6fa" stroke-width="3" stroke-dasharray="10 8" marker-end="url(#arr)"/>
+<rect x="1740" y="135" width="469" height="84" rx="13" fill="#213d43" stroke="#73d6c5" stroke-width="2" />
+<text x="1974.5" y="173.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" font-weight="700" fill="#EAF2FF" >1 ingress root  +  2 delegates</text>
+<text x="1974.5" y="199.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="500" fill="#C8DAE9" >Istio configuration, not extra hops</text>
+<path d="M 1673,176 L 1734,176" fill="none" stroke="#c5e6fa" stroke-width="3" stroke-dasharray="10 8" marker-end="url(#arr)"/>
+<rect x="52" y="286" width="2196" height="474" rx="32" fill="url(#panel)" stroke="#24466e" stroke-width="3" filter="url(#shadow)"/>
+<rect x="52" y="286" width="2196" height="54" rx="22" fill="#24466e" stroke="none" stroke-width="0" />
+<text x="93" y="323" text-anchor="start" font-family="DejaVu Sans,Arial,sans-serif" font-size="29" font-weight="800" fill="#fff" >APPLICATION A</text>
+<text x="2230" y="321" text-anchor="end" font-family="DejaVu Sans,Arial,sans-serif" font-size="19" font-weight="500" fill="#e6f3ff" >HTTP: Frontend → Backend → CRUD    •    SQL/TCP: CRUD → MariaDB</text>
+<rect x="95" y="352" width="500" height="364" rx="14" fill="#142b44" stroke="#476f94" stroke-width="2" />
+<text x="113" y="388" text-anchor="start" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="760" fill="#f5f7fd" >FRONTEND  •  canary</text>
+<rect x="658" y="352" width="500" height="364" rx="14" fill="#142b44" stroke="#476f94" stroke-width="2" />
+<text x="676" y="388" text-anchor="start" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="760" fill="#f5f7fd" >BACKEND  •  canary</text>
+<rect x="1221" y="352" width="500" height="364" rx="14" fill="#142b44" stroke="#476f94" stroke-width="2" />
+<text x="1239" y="388" text-anchor="start" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="760" fill="#f5f7fd" >CRUD  •  rolling update</text>
+<rect x="1784" y="352" width="420" height="364" rx="14" fill="#142b44" stroke="#476f94" stroke-width="2" />
+<text x="1802" y="388" text-anchor="start" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="760" fill="#f5f7fd" >MARIADB  •  blue/green</text>
+<rect x="114" y="407" width="462" height="56" rx="13" fill="#193a31" stroke="#8ad0a7" stroke-width="2" />
+<text x="345.0" y="431.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" font-weight="700" fill="#EAF2FF" >front-a-router</text>
+<text x="345.0" y="457.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="15" font-weight="500" fill="#C8DAE9" >delegate  •  x-front-track  •  weight managed by Rollout</text>
+<rect x="113" y="477" width="464" height="70" rx="13" fill="#204775" stroke="#66b5ff" stroke-width="2" />
+<text x="345.0" y="508.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="20" font-weight="700" fill="#EAF2FF" >front-a-stable  →  BLUE</text>
+<text x="345.0" y="534.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="16" font-weight="500" fill="#C8DAE9" >Service → stable Frontend Pods</text>
+<rect x="113" y="558" width="464" height="70" rx="13" fill="#71502a" stroke="#ffc36e" stroke-width="2" />
+<text x="345.0" y="589.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="20" font-weight="700" fill="#EAF2FF" >front-a-canary  →  YELLOW</text>
+<text x="345.0" y="615.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="16" font-weight="500" fill="#C8DAE9" >Service → candidate Frontend Pods</text>
+<text x="345.0" y="693" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="500" fill="#b7d9ef" >Rollout/front-a   •   Argo-managed primary</text>
+<rect x="676" y="407" width="464" height="56" rx="13" fill="#193a31" stroke="#8ad0a7" stroke-width="2" />
+<text x="908.0" y="431.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" font-weight="700" fill="#EAF2FF" >backend-a-router</text>
+<text x="908.0" y="457.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="15" font-weight="500" fill="#C8DAE9" >mesh  •  x-backend-track  •  separate service host</text>
+<rect x="676" y="477" width="464" height="70" rx="13" fill="#3b3356" stroke="#ba9dec" stroke-width="2" />
+<text x="908.0" y="508.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="20" font-weight="700" fill="#EAF2FF" >backend-a-stable  →  BLUE</text>
+<text x="908.0" y="534.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="16" font-weight="500" fill="#C8DAE9" >Service → stable Backend Pods</text>
+<rect x="676" y="558" width="464" height="70" rx="13" fill="#68475c" stroke="#dfacdd" stroke-width="2" />
+<text x="908.0" y="589.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="20" font-weight="700" fill="#EAF2FF" >backend-a-canary  →  YELLOW</text>
+<text x="908.0" y="615.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="16" font-weight="500" fill="#C8DAE9" >Service → candidate Backend Pods</text>
+<text x="908.0" y="693" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="500" fill="#b7d9ef" >Rollout/backend-a   •   independent weights</text>
+<rect x="1239" y="407" width="464" height="56" rx="13" fill="#193a31" stroke="#8ad0a7" stroke-width="2" />
+<text x="1471.0" y="431.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" font-weight="700" fill="#EAF2FF" >crud-a-router</text>
+<text x="1471.0" y="457.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="15" font-weight="500" fill="#C8DAE9" >mesh  •  x-db-track  •  set x-crud-db-target</text>
+<rect x="1240" y="477" width="224.0" height="70" rx="13" fill="#184971" stroke="#77c3f5" stroke-width="2" />
+<text x="1352.0" y="508.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="700" fill="#EAF2FF" >crud-a-blue</text>
+<text x="1352.0" y="534.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="16" font-weight="500" fill="#C8DAE9" >Service</text>
+<rect x="1478.0" y="477" width="224.0" height="70" rx="13" fill="#265f59" stroke="#86d6c4" stroke-width="2" />
+<text x="1590.0" y="508.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="700" fill="#EAF2FF" >crud-a-green</text>
+<text x="1590.0" y="534.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="16" font-weight="500" fill="#C8DAE9" >Service</text>
+<rect x="1240" y="558" width="462" height="70" rx="13" fill="#4c4365" stroke="#c0abdf" stroke-width="2" />
+<text x="1471.0" y="589.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="700" fill="#EAF2FF" >SAME CRUD POD SET</text>
+<text x="1471.0" y="615.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="500" fill="#C8DAE9" >Both Services select app=crud-a</text>
+<text x="1471.0" y="693" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="500" fill="#b7d9ef" >Rollout/crud-a   •   rolling update, NOT blue/green</text>
+<rect x="1799" y="407" width="390" height="56" rx="13" fill="#283e36" stroke="#86bea4" stroke-width="2" />
+<text x="1994.0" y="431.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="19" font-weight="700" fill="#EAF2FF" >Native SQL/TCP  •  port 3306</text>
+<text x="1994.0" y="457.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="15" font-weight="500" fill="#C8DAE9" >CRUD selects the database destination</text>
+<rect x="1799" y="477" width="390" height="70" rx="13" fill="#204775" stroke="#66b5ff" stroke-width="2" />
+<text x="1994.0" y="508.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="19" font-weight="700" fill="#EAF2FF" >mariadb-a-stable  →  BLUE</text>
+<text x="1994.0" y="534.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="16" font-weight="500" fill="#C8DAE9" >Active Service → active DB Pod</text>
+<rect x="1799" y="558" width="390" height="70" rx="13" fill="#26614c" stroke="#78dea6" stroke-width="2" />
+<text x="1994.0" y="589.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="19" font-weight="700" fill="#EAF2FF" >mariadb-a-canary  →  GREEN</text>
+<text x="1994.0" y="615.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="16" font-weight="500" fill="#C8DAE9" >Preview Service → preview DB Pod</text>
+<text x="1994.0" y="693" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="500" fill="#b7d9ef" >Rollout/mariadb-a  •  blueGreen</text>
+<path d="M 600,576 L 649,576" fill="none" stroke="#c5e6fa" stroke-width="4" marker-end="url(#arr)"/>
+<text x="626.5" y="561" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="800" fill="#f1d6a3" >HTTP</text>
+<path d="M 1163,576 L 1212,576" fill="none" stroke="#c5e6fa" stroke-width="4" marker-end="url(#arr)"/>
+<text x="1189.5" y="561" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="800" fill="#f1d6a3" >HTTP</text>
+<path d="M 1726,593 L 1775,593" fill="none" stroke="#c5e6fa" stroke-width="4" marker-end="url(#arr)"/>
+<text x="1752.5" y="578" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="800" fill="#f1d6a3" >TCP</text>
+<path d="M 339,352 L 339,397" fill="none" stroke="#9ac4ff" stroke-width="3" stroke-dasharray="6 8"/>
+<text x="2230" y="749" text-anchor="end" font-family="DejaVu Sans,Arial,sans-serif" font-size="16" font-weight="500" fill="#c0d0e5" >A  •  namespace full-multi</text>
+<rect x="52" y="783" width="2196" height="474" rx="32" fill="url(#panel)" stroke="#174c50" stroke-width="3" filter="url(#shadow)"/>
+<rect x="52" y="783" width="2196" height="54" rx="22" fill="#174c50" stroke="none" stroke-width="0" />
+<text x="93" y="820" text-anchor="start" font-family="DejaVu Sans,Arial,sans-serif" font-size="29" font-weight="800" fill="#fff" >APPLICATION B</text>
+<text x="2230" y="818" text-anchor="end" font-family="DejaVu Sans,Arial,sans-serif" font-size="19" font-weight="500" fill="#e6f3ff" >HTTP: Frontend → Backend → CRUD    •    SQL/TCP: CRUD → MariaDB</text>
+<rect x="95" y="849" width="500" height="364" rx="14" fill="#142b44" stroke="#476f94" stroke-width="2" />
+<text x="113" y="885" text-anchor="start" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="760" fill="#f5f7fd" >FRONTEND  •  canary</text>
+<rect x="658" y="849" width="500" height="364" rx="14" fill="#142b44" stroke="#476f94" stroke-width="2" />
+<text x="676" y="885" text-anchor="start" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="760" fill="#f5f7fd" >BACKEND  •  canary</text>
+<rect x="1221" y="849" width="500" height="364" rx="14" fill="#142b44" stroke="#476f94" stroke-width="2" />
+<text x="1239" y="885" text-anchor="start" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="760" fill="#f5f7fd" >CRUD  •  rolling update</text>
+<rect x="1784" y="849" width="420" height="364" rx="14" fill="#142b44" stroke="#476f94" stroke-width="2" />
+<text x="1802" y="885" text-anchor="start" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="760" fill="#f5f7fd" >MARIADB  •  blue/green</text>
+<rect x="114" y="904" width="462" height="56" rx="13" fill="#193a31" stroke="#8ad0a7" stroke-width="2" />
+<text x="345.0" y="928.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" font-weight="700" fill="#EAF2FF" >front-b-router</text>
+<text x="345.0" y="954.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="15" font-weight="500" fill="#C8DAE9" >delegate  •  x-front-track  •  weight managed by Rollout</text>
+<rect x="113" y="974" width="464" height="70" rx="13" fill="#204775" stroke="#66b5ff" stroke-width="2" />
+<text x="345.0" y="1005.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="20" font-weight="700" fill="#EAF2FF" >front-b-stable  →  BLUE</text>
+<text x="345.0" y="1031.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="16" font-weight="500" fill="#C8DAE9" >Service → stable Frontend Pods</text>
+<rect x="113" y="1055" width="464" height="70" rx="13" fill="#71502a" stroke="#ffc36e" stroke-width="2" />
+<text x="345.0" y="1086.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="20" font-weight="700" fill="#EAF2FF" >front-b-canary  →  YELLOW</text>
+<text x="345.0" y="1112.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="16" font-weight="500" fill="#C8DAE9" >Service → candidate Frontend Pods</text>
+<text x="345.0" y="1190" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="500" fill="#b7d9ef" >Rollout/front-b   •   Argo-managed secondary</text>
+<rect x="676" y="904" width="464" height="56" rx="13" fill="#193a31" stroke="#8ad0a7" stroke-width="2" />
+<text x="908.0" y="928.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" font-weight="700" fill="#EAF2FF" >backend-b-router</text>
+<text x="908.0" y="954.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="15" font-weight="500" fill="#C8DAE9" >mesh  •  x-backend-track  •  separate service host</text>
+<rect x="676" y="974" width="464" height="70" rx="13" fill="#3b3356" stroke="#ba9dec" stroke-width="2" />
+<text x="908.0" y="1005.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="20" font-weight="700" fill="#EAF2FF" >backend-b-stable  →  BLUE</text>
+<text x="908.0" y="1031.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="16" font-weight="500" fill="#C8DAE9" >Service → stable Backend Pods</text>
+<rect x="676" y="1055" width="464" height="70" rx="13" fill="#68475c" stroke="#dfacdd" stroke-width="2" />
+<text x="908.0" y="1086.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="20" font-weight="700" fill="#EAF2FF" >backend-b-canary  →  YELLOW</text>
+<text x="908.0" y="1112.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="16" font-weight="500" fill="#C8DAE9" >Service → candidate Backend Pods</text>
+<text x="908.0" y="1190" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="500" fill="#b7d9ef" >Rollout/backend-b   •   independent weights</text>
+<rect x="1239" y="904" width="464" height="56" rx="13" fill="#193a31" stroke="#8ad0a7" stroke-width="2" />
+<text x="1471.0" y="928.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" font-weight="700" fill="#EAF2FF" >crud-b-router</text>
+<text x="1471.0" y="954.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="15" font-weight="500" fill="#C8DAE9" >mesh  •  x-db-track  •  set x-crud-db-target</text>
+<rect x="1240" y="974" width="224.0" height="70" rx="13" fill="#184971" stroke="#77c3f5" stroke-width="2" />
+<text x="1352.0" y="1005.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="700" fill="#EAF2FF" >crud-b-blue</text>
+<text x="1352.0" y="1031.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="16" font-weight="500" fill="#C8DAE9" >Service</text>
+<rect x="1478.0" y="974" width="224.0" height="70" rx="13" fill="#265f59" stroke="#86d6c4" stroke-width="2" />
+<text x="1590.0" y="1005.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="700" fill="#EAF2FF" >crud-b-green</text>
+<text x="1590.0" y="1031.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="16" font-weight="500" fill="#C8DAE9" >Service</text>
+<rect x="1240" y="1055" width="462" height="70" rx="13" fill="#4c4365" stroke="#c0abdf" stroke-width="2" />
+<text x="1471.0" y="1086.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" font-weight="700" fill="#EAF2FF" >SAME CRUD POD SET</text>
+<text x="1471.0" y="1112.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="500" fill="#C8DAE9" >Both Services select app=crud-b</text>
+<text x="1471.0" y="1190" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="500" fill="#b7d9ef" >Rollout/crud-b   •   rolling update, NOT blue/green</text>
+<rect x="1799" y="904" width="390" height="56" rx="13" fill="#283e36" stroke="#86bea4" stroke-width="2" />
+<text x="1994.0" y="928.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="19" font-weight="700" fill="#EAF2FF" >Native SQL/TCP  •  port 3306</text>
+<text x="1994.0" y="954.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="15" font-weight="500" fill="#C8DAE9" >CRUD selects the database destination</text>
+<rect x="1799" y="974" width="390" height="70" rx="13" fill="#204775" stroke="#66b5ff" stroke-width="2" />
+<text x="1994.0" y="1005.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="19" font-weight="700" fill="#EAF2FF" >mariadb-b-stable  →  BLUE</text>
+<text x="1994.0" y="1031.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="16" font-weight="500" fill="#C8DAE9" >Active Service → active DB Pod</text>
+<rect x="1799" y="1055" width="390" height="70" rx="13" fill="#26614c" stroke="#78dea6" stroke-width="2" />
+<text x="1994.0" y="1086.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="19" font-weight="700" fill="#EAF2FF" >mariadb-b-canary  →  GREEN</text>
+<text x="1994.0" y="1112.0" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="16" font-weight="500" fill="#C8DAE9" >Preview Service → preview DB Pod</text>
+<text x="1994.0" y="1190" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="500" fill="#b7d9ef" >Rollout/mariadb-b  •  blueGreen</text>
+<path d="M 600,1073 L 649,1073" fill="none" stroke="#c5e6fa" stroke-width="4" marker-end="url(#arr)"/>
+<text x="626.5" y="1058" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="800" fill="#f1d6a3" >HTTP</text>
+<path d="M 1163,1073 L 1212,1073" fill="none" stroke="#c5e6fa" stroke-width="4" marker-end="url(#arr)"/>
+<text x="1189.5" y="1058" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="800" fill="#f1d6a3" >HTTP</text>
+<path d="M 1726,1090 L 1775,1090" fill="none" stroke="#c5e6fa" stroke-width="4" marker-end="url(#arr)"/>
+<text x="1752.5" y="1075" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="800" fill="#f1d6a3" >TCP</text>
+<path d="M 339,849 L 339,894" fill="none" stroke="#9ac4ff" stroke-width="3" stroke-dasharray="6 8"/>
+<text x="2230" y="1246" text-anchor="end" font-family="DejaVu Sans,Arial,sans-serif" font-size="16" font-weight="500" fill="#c0d0e5" >B  •  namespace full-multi</text>
+<path d="M 1190,231 L 1190,274 L 339,274 L 339,297" fill="none" stroke="#99d6fb" stroke-width="3" stroke-dasharray="8 7"/>
+<path d="M 1210,231 L 1210,275 L 25,275 L 25,825 L 335,825 L 335,859" fill="none" stroke="#99d6fb" stroke-width="3" stroke-dasharray="8 7"/>
+<rect x="52" y="1278" width="2196" height="150" rx="22" fill="#12233b" stroke="#4e7b9b" stroke-width="2" />
+<text x="85" y="1314" text-anchor="start" font-family="DejaVu Sans,Arial,sans-serif" font-size="23" font-weight="750" fill="#fff" >Architecture notes</text>
+<text x="85" y="1356" text-anchor="start" font-family="DejaVu Sans,Arial,sans-serif" font-size="19" font-weight="500" fill="#dceafb" >7 VirtualServices = 1 ingress root + 2 frontend delegates + 2 backend mesh routers + 2 CRUD mesh routers</text>
+<text x="85" y="1392" text-anchor="start" font-family="DejaVu Sans,Arial,sans-serif" font-size="19" font-weight="500" fill="#dceafb" >8 Rollouts = 2 × (Frontend canary + Backend canary + CRUD rolling + MariaDB blue/green)</text>
+<text x="2160" y="1356" text-anchor="end" font-family="DejaVu Sans,Arial,sans-serif" font-size="18" font-weight="600" fill="#abd9dd" >17 Services total (8 per app + ingress)</text>
+<text x="2160" y="1392" text-anchor="end" font-family="DejaVu Sans,Arial,sans-serif" font-size="18" font-weight="600" fill="#abd9dd" >Dotted = delegation/config   •   Solid = data flow</text>
+</svg>

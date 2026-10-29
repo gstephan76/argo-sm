@@ -1,0 +1,196 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1677 938" width="1677" height="938" role="img" aria-labelledby="title desc">
+<title id="title">full-multi — AS IS Implementation (Istio VirtualService Delegation)</title>
+<desc id="desc">Original three-tier architecture overview, showing one root ingress VirtualService delegating to separate Application A and B frontend VirtualServices, plus independent backend and CRUD mesh VirtualServices. Stable and canary rows are visual routing paths, not distinct duplicated VirtualService resources.</desc>
+<defs>
+<linearGradient id="bg" x1="0" x2="0.8" y1="0" y2="1"><stop stop-color="#101e32"/><stop offset=".56" stop-color="#1b3455"/><stop offset="1" stop-color="#335e93"/></linearGradient>
+<linearGradient id="panel" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#1d324e"/><stop offset="1" stop-color="#0e1c30"/></linearGradient>
+<linearGradient id="diamond" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#174125"/><stop offset="1" stop-color="#0b240f"/></linearGradient>
+<linearGradient id="service" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#61b7ff"/><stop offset="1" stop-color="#488ed9"/></linearGradient>
+<linearGradient id="root" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#34244d"/><stop offset="1" stop-color="#141f3c"/></linearGradient>
+<linearGradient id="backend" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#49344b"/><stop offset="1" stop-color="#2c233c"/></linearGradient>
+<linearGradient id="crud" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#baa1ca"/><stop offset="1" stop-color="#967ba8"/></linearGradient>
+<linearGradient id="redRibbon" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#d85059"/><stop offset="1" stop-color="#60262e"/></linearGradient>
+<linearGradient id="goldRibbon" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#cb8709"/><stop offset="1" stop-color="#663b09"/></linearGradient>
+<linearGradient id="blueRibbon" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#326baa"/><stop offset="1" stop-color="#21364d"/></linearGradient>
+<filter id="glow" x="-20%" y="-20%" width="140%" height="145%"><feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#96caee" flood-opacity=".28"/></filter>
+<marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 z" fill="#eff8ff"/></marker>
+</defs>
+<rect x="2" y="2" width="1673" height="934" rx="60" fill="url(#bg)" stroke="#7198c8" stroke-width="2" />
+<text x="25" y="68" text-anchor="start" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="28" font-weight="700" fill="#fff" >full-multi — AS IS Implementation</text>
+<text x="25" y="102" text-anchor="start" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="25" font-weight="500" fill="#f6f7ff" >(Istio VirtualService Delegation)</text>
+<rect x="460" y="93" width="1182" height="302" rx="45" fill="url(#panel)" stroke="#5aafca" stroke-width="1.9" filter="url(#glow)"/>
+<text x="1608" y="140" text-anchor="end" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#fff" >APP A</text>
+<rect x="485" y="158" width="1096" height="110" rx="4" fill="#15283e" stroke="#5f8ebd" stroke-width="1.2" />
+<rect x="485" y="158" width="1096" height="26" rx="2" fill="url(#blueRibbon)" stroke="#6a9cd5" stroke-width="0.8" />
+<text x="1033" y="176" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#e7f6ff" >Stable</text>
+<rect x="485" y="280" width="1096" height="110" rx="4" fill="#142638" stroke="#c47b03" stroke-width="1.2" />
+<rect x="485" y="280" width="1096" height="26" rx="2" fill="url(#goldRibbon)" stroke="#dd9b13" stroke-width="0.9" />
+<text x="1033" y="300" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#fff" >Canary</text>
+<rect x="550" y="113" width="258" height="273" rx="2" fill="none" stroke="#de6771" stroke-width="1.5" />
+<rect x="550" y="113" width="258" height="33" rx="2" fill="url(#redRibbon)" stroke="#e47e7d" stroke-width="1" />
+<text x="679.0" y="135" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#fff" >Rollout Front A</text>
+<rect x="852" y="113" width="290" height="273" rx="2" fill="none" stroke="#de6771" stroke-width="1.5" />
+<rect x="852" y="113" width="290" height="33" rx="2" fill="url(#redRibbon)" stroke="#e47e7d" stroke-width="1" />
+<text x="997.0" y="135" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#fff" >Rollout Backend A</text>
+<rect x="1200" y="113" width="322" height="273" rx="2" fill="none" stroke="#de6771" stroke-width="1.5" />
+<rect x="1200" y="113" width="322" height="33" rx="2" fill="url(#redRibbon)" stroke="#e47e7d" stroke-width="1" />
+<text x="1361.0" y="135" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#fff" >Rollout CRUD A</text>
+<polygon points="554,183 589,218 554,253 519,218" fill="url(#diamond)" stroke="#add0b2" stroke-width="1.6" filter="url(#glow)"/>
+<text x="554" y="209" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="13" font-weight="600" fill="#f3ffec" >Virtual</text>
+<text x="554" y="225" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="13" font-weight="600" fill="#f3ffec" >Service</text>
+<rect x="620" y="187" width="161" height="63" rx="12" fill="url(#service)" stroke="#b9d8ff" stroke-width="1.5" filter="url(#glow)"/>
+<text x="700.5" y="213.5" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="18" font-weight="600" fill="#fff" >Front A</text>
+<text x="700.5" y="234.5" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="18" font-weight="600" fill="#fff" >stable</text>
+<polygon points="855,183 890,218 855,253 820,218" fill="url(#diamond)" stroke="#add0b2" stroke-width="1.6" filter="url(#glow)"/>
+<text x="855" y="209" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="13" font-weight="600" fill="#f3ffec" >Virtual</text>
+<text x="855" y="225" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="13" font-weight="600" fill="#f3ffec" >Service</text>
+<rect x="920" y="187" width="192" height="63" rx="12" fill="url(#backend)" stroke="#b39bae" stroke-width="1.5" filter="url(#glow)"/>
+<text x="1016.0" y="213.5" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="18" font-weight="600" fill="#fff" >Backend A</text>
+<text x="1016.0" y="234.5" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="18" font-weight="600" fill="#fff" >stable</text>
+<polygon points="1205,183 1240,218 1205,253 1170,218" fill="url(#diamond)" stroke="#add0b2" stroke-width="1.6" filter="url(#glow)"/>
+<text x="1205" y="209" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="13" font-weight="600" fill="#f3ffec" >Virtual</text>
+<text x="1205" y="225" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="13" font-weight="600" fill="#f3ffec" >Service</text>
+<rect x="1280" y="187" width="201" height="63" rx="12" fill="url(#crud)" stroke="#d0b6d9" stroke-width="1.5" filter="url(#glow)"/>
+<text x="1380.5" y="213.5" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="17" font-weight="600" fill="#fff" >CRUD A</text>
+<text x="1380.5" y="234.5" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="17" font-weight="600" fill="#fff" >same Pod set</text>
+<path d="M 589,218 L 615,218" fill="none" stroke="#eaf1f8" stroke-width="2" marker-end="url(#arrow)" />
+<path d="M 782,218 L 817,218" fill="none" stroke="#eaf1f8" stroke-width="2" marker-end="url(#arrow)" />
+<path d="M 890,218 L 915,218" fill="none" stroke="#eaf1f8" stroke-width="2" marker-end="url(#arrow)" />
+<path d="M 1113,218 L 1167,218" fill="none" stroke="#eaf1f8" stroke-width="2" marker-end="url(#arrow)" />
+<path d="M 1240,218 L 1275,218" fill="none" stroke="#eaf1f8" stroke-width="2" marker-end="url(#arrow)" />
+<polygon points="554,306 589,341 554,376 519,341" fill="url(#diamond)" stroke="#add0b2" stroke-width="1.6" filter="url(#glow)"/>
+<text x="554" y="332" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="13" font-weight="600" fill="#f3ffec" >Virtual</text>
+<text x="554" y="348" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="13" font-weight="600" fill="#f3ffec" >Service</text>
+<rect x="620" y="310" width="161" height="63" rx="12" fill="url(#service)" stroke="#b9d8ff" stroke-width="1.5" filter="url(#glow)"/>
+<text x="700.5" y="336.5" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="18" font-weight="600" fill="#fff" >Front A</text>
+<text x="700.5" y="357.5" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="18" font-weight="600" fill="#fff" >canary</text>
+<polygon points="855,306 890,341 855,376 820,341" fill="url(#diamond)" stroke="#add0b2" stroke-width="1.6" filter="url(#glow)"/>
+<text x="855" y="332" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="13" font-weight="600" fill="#f3ffec" >Virtual</text>
+<text x="855" y="348" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="13" font-weight="600" fill="#f3ffec" >Service</text>
+<rect x="920" y="310" width="192" height="63" rx="12" fill="url(#backend)" stroke="#b39bae" stroke-width="1.5" filter="url(#glow)"/>
+<text x="1016.0" y="336.5" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="18" font-weight="600" fill="#fff" >Backend A</text>
+<text x="1016.0" y="357.5" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="18" font-weight="600" fill="#fff" >canary</text>
+<polygon points="1205,306 1240,341 1205,376 1170,341" fill="url(#diamond)" stroke="#add0b2" stroke-width="1.6" filter="url(#glow)"/>
+<text x="1205" y="332" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="13" font-weight="600" fill="#f3ffec" >Virtual</text>
+<text x="1205" y="348" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="13" font-weight="600" fill="#f3ffec" >Service</text>
+<rect x="1280" y="310" width="201" height="63" rx="12" fill="url(#crud)" stroke="#d0b6d9" stroke-width="1.5" filter="url(#glow)"/>
+<text x="1380.5" y="336.5" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="17" font-weight="600" fill="#fff" >CRUD A</text>
+<text x="1380.5" y="357.5" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="17" font-weight="600" fill="#fff" >same Pod set</text>
+<path d="M 589,341 L 615,341" fill="none" stroke="#eaf1f8" stroke-width="2" marker-end="url(#arrow)" />
+<path d="M 782,341 L 817,341" fill="none" stroke="#eaf1f8" stroke-width="2" marker-end="url(#arrow)" />
+<path d="M 890,341 L 915,341" fill="none" stroke="#eaf1f8" stroke-width="2" marker-end="url(#arrow)" />
+<path d="M 1113,341 L 1167,341" fill="none" stroke="#eaf1f8" stroke-width="2" marker-end="url(#arrow)" />
+<path d="M 1240,341 L 1275,341" fill="none" stroke="#eaf1f8" stroke-width="2" marker-end="url(#arrow)" />
+<text x="1040" y="406" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="14" font-weight="500" fill="#aac7da" >APP A  ·  Front: delegate  ·  Backend &amp; CRUD: mesh VirtualServices</text>
+<rect x="460" y="419" width="1182" height="302" rx="45" fill="url(#panel)" stroke="#36bdb2" stroke-width="1.9" filter="url(#glow)"/>
+<text x="1608" y="466" text-anchor="end" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#fff" >APP B</text>
+<rect x="485" y="484" width="1096" height="110" rx="4" fill="#15283e" stroke="#5f8ebd" stroke-width="1.2" />
+<rect x="485" y="484" width="1096" height="26" rx="2" fill="url(#blueRibbon)" stroke="#6a9cd5" stroke-width="0.8" />
+<text x="1033" y="502" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#e7f6ff" >Stable</text>
+<rect x="485" y="606" width="1096" height="110" rx="4" fill="#142638" stroke="#c47b03" stroke-width="1.2" />
+<rect x="485" y="606" width="1096" height="26" rx="2" fill="url(#goldRibbon)" stroke="#dd9b13" stroke-width="0.9" />
+<text x="1033" y="626" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#fff" >Canary</text>
+<rect x="550" y="439" width="258" height="273" rx="2" fill="none" stroke="#de6771" stroke-width="1.5" />
+<rect x="550" y="439" width="258" height="33" rx="2" fill="url(#redRibbon)" stroke="#e47e7d" stroke-width="1" />
+<text x="679.0" y="461" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#fff" >Rollout Front B</text>
+<rect x="852" y="439" width="290" height="273" rx="2" fill="none" stroke="#de6771" stroke-width="1.5" />
+<rect x="852" y="439" width="290" height="33" rx="2" fill="url(#redRibbon)" stroke="#e47e7d" stroke-width="1" />
+<text x="997.0" y="461" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#fff" >Rollout Backend B</text>
+<rect x="1200" y="439" width="322" height="273" rx="2" fill="none" stroke="#de6771" stroke-width="1.5" />
+<rect x="1200" y="439" width="322" height="33" rx="2" fill="url(#redRibbon)" stroke="#e47e7d" stroke-width="1" />
+<text x="1361.0" y="461" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#fff" >Rollout CRUD B</text>
+<polygon points="554,509 589,544 554,579 519,544" fill="url(#diamond)" stroke="#add0b2" stroke-width="1.6" filter="url(#glow)"/>
+<text x="554" y="535" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="13" font-weight="600" fill="#f3ffec" >Virtual</text>
+<text x="554" y="551" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="13" font-weight="600" fill="#f3ffec" >Service</text>
+<rect x="620" y="513" width="161" height="63" rx="12" fill="url(#service)" stroke="#b9d8ff" stroke-width="1.5" filter="url(#glow)"/>
+<text x="700.5" y="539.5" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="18" font-weight="600" fill="#fff" >Front B</text>
+<text x="700.5" y="560.5" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="18" font-weight="600" fill="#fff" >stable</text>
+<polygon points="855,509 890,544 855,579 820,544" fill="url(#diamond)" stroke="#add0b2" stroke-width="1.6" filter="url(#glow)"/>
+<text x="855" y="535" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="13" font-weight="600" fill="#f3ffec" >Virtual</text>
+<text x="855" y="551" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="13" font-weight="600" fill="#f3ffec" >Service</text>
+<rect x="920" y="513" width="192" height="63" rx="12" fill="url(#backend)" stroke="#b39bae" stroke-width="1.5" filter="url(#glow)"/>
+<text x="1016.0" y="539.5" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="18" font-weight="600" fill="#fff" >Backend B</text>
+<text x="1016.0" y="560.5" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="18" font-weight="600" fill="#fff" >stable</text>
+<polygon points="1205,509 1240,544 1205,579 1170,544" fill="url(#diamond)" stroke="#add0b2" stroke-width="1.6" filter="url(#glow)"/>
+<text x="1205" y="535" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="13" font-weight="600" fill="#f3ffec" >Virtual</text>
+<text x="1205" y="551" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="13" font-weight="600" fill="#f3ffec" >Service</text>
+<rect x="1280" y="513" width="201" height="63" rx="12" fill="url(#crud)" stroke="#d0b6d9" stroke-width="1.5" filter="url(#glow)"/>
+<text x="1380.5" y="539.5" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="17" font-weight="600" fill="#fff" >CRUD B</text>
+<text x="1380.5" y="560.5" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="17" font-weight="600" fill="#fff" >same Pod set</text>
+<path d="M 589,544 L 615,544" fill="none" stroke="#eaf1f8" stroke-width="2" marker-end="url(#arrow)" />
+<path d="M 782,544 L 817,544" fill="none" stroke="#eaf1f8" stroke-width="2" marker-end="url(#arrow)" />
+<path d="M 890,544 L 915,544" fill="none" stroke="#eaf1f8" stroke-width="2" marker-end="url(#arrow)" />
+<path d="M 1113,544 L 1167,544" fill="none" stroke="#eaf1f8" stroke-width="2" marker-end="url(#arrow)" />
+<path d="M 1240,544 L 1275,544" fill="none" stroke="#eaf1f8" stroke-width="2" marker-end="url(#arrow)" />
+<polygon points="554,632 589,667 554,702 519,667" fill="url(#diamond)" stroke="#add0b2" stroke-width="1.6" filter="url(#glow)"/>
+<text x="554" y="658" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="13" font-weight="600" fill="#f3ffec" >Virtual</text>
+<text x="554" y="674" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="13" font-weight="600" fill="#f3ffec" >Service</text>
+<rect x="620" y="636" width="161" height="63" rx="12" fill="url(#service)" stroke="#b9d8ff" stroke-width="1.5" filter="url(#glow)"/>
+<text x="700.5" y="662.5" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="18" font-weight="600" fill="#fff" >Front B</text>
+<text x="700.5" y="683.5" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="18" font-weight="600" fill="#fff" >canary</text>
+<polygon points="855,632 890,667 855,702 820,667" fill="url(#diamond)" stroke="#add0b2" stroke-width="1.6" filter="url(#glow)"/>
+<text x="855" y="658" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="13" font-weight="600" fill="#f3ffec" >Virtual</text>
+<text x="855" y="674" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="13" font-weight="600" fill="#f3ffec" >Service</text>
+<rect x="920" y="636" width="192" height="63" rx="12" fill="url(#backend)" stroke="#b39bae" stroke-width="1.5" filter="url(#glow)"/>
+<text x="1016.0" y="662.5" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="18" font-weight="600" fill="#fff" >Backend B</text>
+<text x="1016.0" y="683.5" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="18" font-weight="600" fill="#fff" >canary</text>
+<polygon points="1205,632 1240,667 1205,702 1170,667" fill="url(#diamond)" stroke="#add0b2" stroke-width="1.6" filter="url(#glow)"/>
+<text x="1205" y="658" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="13" font-weight="600" fill="#f3ffec" >Virtual</text>
+<text x="1205" y="674" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="13" font-weight="600" fill="#f3ffec" >Service</text>
+<rect x="1280" y="636" width="201" height="63" rx="12" fill="url(#crud)" stroke="#d0b6d9" stroke-width="1.5" filter="url(#glow)"/>
+<text x="1380.5" y="662.5" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="17" font-weight="600" fill="#fff" >CRUD B</text>
+<text x="1380.5" y="683.5" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="17" font-weight="600" fill="#fff" >same Pod set</text>
+<path d="M 589,667 L 615,667" fill="none" stroke="#eaf1f8" stroke-width="2" marker-end="url(#arrow)" />
+<path d="M 782,667 L 817,667" fill="none" stroke="#eaf1f8" stroke-width="2" marker-end="url(#arrow)" />
+<path d="M 890,667 L 915,667" fill="none" stroke="#eaf1f8" stroke-width="2" marker-end="url(#arrow)" />
+<path d="M 1113,667 L 1167,667" fill="none" stroke="#eaf1f8" stroke-width="2" marker-end="url(#arrow)" />
+<path d="M 1240,667 L 1275,667" fill="none" stroke="#eaf1f8" stroke-width="2" marker-end="url(#arrow)" />
+<text x="1040" y="732" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="14" font-weight="500" fill="#aac7da" >APP B  ·  Front: delegate  ·  Backend &amp; CRUD: mesh VirtualServices</text>
+<rect x="242" y="163" width="196" height="271" rx="3" fill="url(#root)" stroke="#c05ace" stroke-width="2" />
+<rect x="242" y="163" width="196" height="64" rx="2" fill="#6a286b" stroke="#c05ace" stroke-width="0.8" />
+<text x="340" y="186" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="15" font-weight="700" fill="#fff" >Unified Frontend</text>
+<text x="340" y="208" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="15" font-weight="700" fill="#fff" >VirtualService</text>
+<text x="340" y="252" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="12" font-weight="500" fill="#e4b9f4" >front-virtualservice.yaml</text>
+<polygon points="337,256 411,330 337,404 263,330" fill="url(#diamond)" stroke="#add0b2" stroke-width="1.6" filter="url(#glow)"/>
+<text x="337" y="321" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="16" font-weight="600" fill="#f3ffec" >Routing</text>
+<text x="337" y="337" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="16" font-weight="600" fill="#f3ffec" >x-app-target</text>
+<circle cx="78" cy="345" r="40" fill="#8c363b" stroke="#ec766b" stroke-width="2" filter="url(#glow)"/>
+<text x="78" y="351" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="16" font-weight="600" fill="#fff" >Gateway</text>
+<polygon points="185,301 229,345 185,389 141,345" fill="url(#diamond)" stroke="#add0b2" stroke-width="1.6" filter="url(#glow)"/>
+<text x="185" y="336" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="13" font-weight="600" fill="#f3ffec" >Virtual</text>
+<text x="185" y="352" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="13" font-weight="600" fill="#f3ffec" >Service</text>
+<path d="M 120,345 H 139" fill="none" stroke="#eaf1f8" stroke-width="3" marker-end="url(#arrow)" />
+<path d="M 229,345 H 260" fill="none" stroke="#eaf1f8" stroke-width="3" marker-end="url(#arrow)" />
+<path d="M 411,304 L 449,304 L 449,218 L 477,218" fill="none" stroke="#eaf1f8" stroke-width="2.5" stroke-dasharray="7 6" marker-end="url(#arrow)" />
+<path d="M 412,355 L 449,355 L 449,543 L 477,543" fill="none" stroke="#eaf1f8" stroke-width="2.5" stroke-dasharray="7 6" marker-end="url(#arrow)" />
+<text x="465" y="287" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="14" font-weight="700" fill="#deeffc" >A</text>
+<text x="464" y="486" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="14" font-weight="700" fill="#deeffc" >B</text>
+<rect x="12" y="412" width="211" height="68" rx="5" fill="#72552a" stroke="#edbd78" stroke-width="1.2" />
+<text x="116" y="432" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="13" font-weight="600" fill="#fff" >gateway.yaml</text>
+<text x="116" y="452" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="13" font-weight="600" fill="#fff" >OpenShift Route + Istio Gateway</text>
+<rect x="18" y="762" width="389" height="153" rx="8" fill="#44253e" stroke="#d24f80" stroke-width="1.5" />
+<text x="33" y="788" text-anchor="start" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#fff" >1. Unified Frontend VirtualService</text>
+<text x="34" y="817" text-anchor="start" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="14" font-weight="500" fill="#eddff1" >front-virtualservice.yaml</text>
+<text x="34" y="842" text-anchor="start" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="14" font-weight="500" fill="#e4e8f7" >Single root for APP A and APP B</text>
+<text x="34" y="867" text-anchor="start" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="14" font-weight="500" fill="#e4e8f7" >x-app-target: b → B; otherwise A</text>
+<text x="34" y="892" text-anchor="start" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="14" font-weight="500" fill="#e4e8f7" >Delegates to front-a / front-b routers</text>
+<rect x="420" y="762" width="389" height="153" rx="8" fill="#44253e" stroke="#d24f80" stroke-width="1.5" />
+<text x="435" y="788" text-anchor="start" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#fff" >2. Per-application Frontend Routers</text>
+<text x="436" y="817" text-anchor="start" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="14" font-weight="500" fill="#eddff1" >front-a-router.yaml / front-b-router.yaml</text>
+<text x="436" y="842" text-anchor="start" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="14" font-weight="500" fill="#e4e8f7" >One delegate per app (no hosts/gateways)</text>
+<text x="436" y="867" text-anchor="start" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="14" font-weight="500" fill="#e4e8f7" >x-front-track: stable or canary</text>
+<text x="436" y="892" text-anchor="start" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="14" font-weight="500" fill="#e4e8f7" >Rollout controls weighted fallback</text>
+<rect x="821" y="762" width="389" height="153" rx="8" fill="#4a292b" stroke="#e0755e" stroke-width="1.5" />
+<text x="836" y="788" text-anchor="start" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#fff" >3. Per-application Backend Routers</text>
+<text x="837" y="817" text-anchor="start" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="14" font-weight="500" fill="#eddff1" >backend-a-virtualservice.yaml</text>
+<text x="837" y="842" text-anchor="start" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="14" font-weight="500" fill="#e4e8f7" >backend-b-virtualservice.yaml</text>
+<text x="837" y="867" text-anchor="start" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="14" font-weight="500" fill="#e4e8f7" >Separate in-mesh host per app</text>
+<text x="837" y="892" text-anchor="start" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="14" font-weight="500" fill="#e4e8f7" >x-backend-track routes stable/canary</text>
+<rect x="1223" y="762" width="435" height="153" rx="8" fill="#4a292b" stroke="#e0755e" stroke-width="1.5" />
+<text x="1238" y="788" text-anchor="start" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#fff" >4. Per-application CRUD Routers</text>
+<text x="1239" y="817" text-anchor="start" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="14" font-weight="500" fill="#eddff1" >crud-a-virtualservice.yaml</text>
+<text x="1239" y="842" text-anchor="start" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="14" font-weight="500" fill="#e4e8f7" >crud-b-virtualservice.yaml</text>
+<text x="1239" y="867" text-anchor="start" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="14" font-weight="500" fill="#e4e8f7" >x-db-track selects BLUE or GREEN</text>
+<text x="1239" y="892" text-anchor="start" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="14" font-weight="500" fill="#e4e8f7" >Both Services select the same CRUD Pods</text>
+<text x="839" y="924" text-anchor="middle" font-family="Arial, Liberation Sans, DejaVu Sans, sans-serif" font-size="13" font-weight="600" fill="#f8fbff" >NS1  (namespace: full-multi)  ·  7 VirtualServices  ·  Stable/Canary paths are routing choices, not duplicated VS objects</text>
+</svg>

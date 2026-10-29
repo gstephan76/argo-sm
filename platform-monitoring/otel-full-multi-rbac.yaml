@@ -1,0 +1,29 @@
+# Namespace-only Kubernetes Pod discovery for Istio OTLP traces.
+# Deliberately NOT in full-multi/kustomization.yaml: this is shared platform infrastructure.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: otel-full-multi-reader
+  namespace: full-multi
+  labels:
+    app.kubernetes.io/managed-by: full-multi-otel-enrichment
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: otel-full-multi-reader
+  namespace: full-multi
+  labels:
+    app.kubernetes.io/managed-by: full-multi-otel-enrichment
+subjects:
+  - kind: ServiceAccount
+    name: otel-collector
+    namespace: istio-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: otel-full-multi-reader

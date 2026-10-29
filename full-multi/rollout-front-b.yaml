@@ -17,7 +17,7 @@ spec:
   template:
     metadata:
       annotations:
-        demo-rollout-revision: candidate-yellow-20261028T171640Z
+        demo-rollout-revision: baseline-blue
         prometheus.io/scrape: 'true'
         prometheus.io/port: '15090'
         prometheus.io/path: /stats/prometheus
@@ -44,7 +44,7 @@ spec:
             - name: ROLE
               value: "front"
             - name: MESSAGE_PREFIX
-              value: "Application B - YELLOW"
+              value: "Application B - BLUE"
             - name: BACKEND_API_URL
               value: "http://backend-b-stable.full-multi.svc.cluster.local:5000/api/books"
           ports:
@@ -93,19 +93,19 @@ spec:
               - templateName: smoke-front-b
             args:
               - name: expected-color
-                value: YELLOW
+                value: BLUE
         - setWeight: 25
         - analysis:
             templates:
               - templateName: smoke-front-b
             args:
               - name: expected-color
-                value: YELLOW
+                value: BLUE
         - setWeight: 50
         - analysis:
             templates:
               - templateName: smoke-front-b
             args:
               - name: expected-color
-                value: YELLOW
+                value: BLUE
         - pause: {}

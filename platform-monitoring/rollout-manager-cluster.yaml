@@ -1,0 +1,11 @@
+# Platform prerequisite, not an application workload.
+# Apply explicitly only when no suitable controller exists:
+#   oc apply -f platform-monitoring/rollout-manager-cluster.yaml
+# Red Hat OpenShift GitOps Operator owns/reconciles the controller Deployment.
+apiVersion: argoproj.io/v1alpha1
+kind: RolloutManager
+metadata:
+  name: rollout-manager
+  namespace: openshift-gitops
+spec:
+  namespaceScoped: false

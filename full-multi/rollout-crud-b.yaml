@@ -20,7 +20,6 @@ spec:
         app: crud-b
         app.kubernetes.io/name: full-multi-crud
         sidecar.istio.io/inject: 'true'
-      annotations:
     spec:
       containers:
         - name: crud

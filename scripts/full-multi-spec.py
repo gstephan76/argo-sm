@@ -135,6 +135,18 @@ def verify():
             hosts_part = vs.split('  hosts:\n', 1)[1].split('  gateways:', 1)[0]
             assert f'    - {new_host}\n' in hosts_part, (tier, app, new_host)
             assert (f'    - {old_host}\n' in hosts_part) == (SERVICE_CLEANUP_PHASE == 'migrate'), (tier, app, old_host)
+    # Istio injection reserves port 15090 for Envoy. Authored application
+    # templates must NOT scrape that port. Istio injects port 15020 dynamically.
+    gateway=(D/'gateway.yaml').read_text()
+    assert 'inject.istio.io/templates: gateway' in gateway
+    for name in ['gateway.yaml'] + [f'rollout-{tier}-{app}.yaml'
+                                     for tier in ('front','backend','crud') for app in 'ab']:
+        content=(D/name).read_text()
+        for forbidden in ('prometheus.io/scrape:', 'prometheus.io/port:',
+                          'prometheus.io/path:'):
+            assert forbidden not in content, (name, 'Istio injection scrape annotation', forbidden)
+    monitor=(D/'podmonitor-istio-proxies.yaml').read_text()
+    assert '__meta_kubernetes_pod_annotation_prometheus_io_port' in monitor
     print('PASS: eight Rollouts, CRUD DB routing and observability contracts')
 
 def setcolor(color,instance):

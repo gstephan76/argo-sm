@@ -1,7 +1,11 @@
-# argo-sm — OpenShift Service Mesh / Argo Rollouts full-demo
+# argo-sm — OpenShift Service Mesh, Argo CD and Argo Rollouts demos
 
-See [full-demo/README.md](full-demo/README.md) for architecture, prerequisites,
-header-based routing, and the exact deploy → prepare → start → promote workflow.
+- [full-multi application and demo lifecycle](full-multi/README.md)
+- [Full-multi fresh-cluster bootstrap, observability and troubleshooting](full-multi/BOOTSTRAP.md)
+- [Canary mesh full demo](full-demo/README.md)
 
-This repository is the GitOps source of truth for the **canary-mesh-full-demo**
-namespace. The OpenShift Service Mesh control plane is an external prerequisite.
+The repository contains application GitOps sources. Shared platform components
+(Istio control plane, Argo Rollouts controller, OpenTelemetry Collector, Tempo,
+Kiali) are external prerequisites and should be managed by their platform
+owners. Do not conflate Argo CD `Synced` with Rollouts readiness or distributed
+tracing health.

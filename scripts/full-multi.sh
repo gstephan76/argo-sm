@@ -19,10 +19,14 @@ check_git(){
  [[ "$(git remote get-url origin)" == *gstephan76/argo-sm* ]] || fail 'Unexpected origin'
 }
 ready(){
- local name="$1" desired="$2" start=$SECONDS phase step
+ local name="$1" desired="$2" start=$SECONDS phase step previous=''
  while (( SECONDS-start < TIMEOUT_SECONDS )); do
    phase="$(oc get rollout "$name" -n "$NS" -o jsonpath='{.status.phase}')"
    step="$(oc get rollout "$name" -n "$NS" -o jsonpath='{.status.currentStepIndex}')"
+   if [[ "$phase/$step" != "$previous" ]]; then
+     echo "ROLLOUT $name phase=${phase:-Unreconciled} step=${step:-none} desired=$desired"
+     previous="$phase/$step"
+   fi
    if [[ "$phase" == Healthy ]]; then [[ "$desired" == healthy ]] && return 0;fi
    if [[ "$phase" == Paused ]]; then
      if [[ "$desired" == paused ]]; then
@@ -38,15 +42,16 @@ ready(){
  fail "timeout waiting for $name desired=$desired"
 }
 sync_git(){
- local wanted="$(git rev-parse HEAD)" start=$SECONDS got st
+ local wanted
+ wanted="$(git rev-parse HEAD)"
  oc annotate application "$APP" -n "$ARGOCD_NS" argocd.argoproj.io/refresh=hard --overwrite >/dev/null
- while (( SECONDS-start < TIMEOUT_SECONDS )); do
-   got="$(oc get application "$APP" -n "$ARGOCD_NS" -o jsonpath='{.status.sync.revision}')"
-   st="$(oc get application "$APP" -n "$ARGOCD_NS" -o jsonpath='{.status.sync.status}')"
-   if [[ "$got" == "$wanted" && "$st" == Synced ]];then return 0;fi
-   sleep "$POLL_SECONDS"
- done
- fail "Argo CD did not sync HEAD ${wanted:0:12}"
+ python3 scripts/full-multi-bootstrap.py wait-sync \
+   --application "$APP" --argocd-namespace "$ARGOCD_NS" \
+   --revision "$wanted" --timeout "$TIMEOUT_SECONDS" --poll "$POLL_SECONDS"
+}
+rollouts_cli(){
+ oc argo rollouts version >/dev/null 2>&1 || \
+   fail 'Missing oc argo rollouts CLI plugin; install kubectl-argo-rollouts on this client'
 }
 commit_stage(){
  local color="$1"
@@ -67,15 +72,21 @@ case "$cmd" in
    python3 scripts/full-multi-spec.py verify
    require oc
    oc apply -f full-multi/namespace.yaml
-   for app in a b;do oc get secret "db-credentials-$app" -n "$NS" >/dev/null || fail "Run scripts/full-multi-secrets.sh before deploy";done
+   python3 scripts/full-multi-bootstrap.py preflight \
+     --namespace "$NS" --argocd-namespace "$ARGOCD_NS"
    oc apply -f argocd/application-full-multi.yaml
    sync_git
-   echo 'PASS: full-multi GitOps synced; verify readiness with status'
+   python3 scripts/full-multi-bootstrap.py wait-ready \
+     --namespace "$NS" --timeout "$TIMEOUT_SECONDS" --poll "$POLL_SECONDS"
+   echo 'PASS: full-multi GitOps synchronized and workloads ready; HTTP/Tempo acceptance remains separate'
    ;;
  prepare|start)
    check_git
    python3 scripts/full-multi-spec.py verify
    require oc
+   rollouts_cli
+   python3 scripts/full-multi-bootstrap.py preflight \
+     --namespace "$NS" --argocd-namespace "$ARGOCD_NS"
    oc get application "$APP" -n "$ARGOCD_NS" >/dev/null || fail 'Run deploy first'
    if [[ "$cmd" == prepare ]];then
      # Retire only superseded revisions; preserve live BLUE/GREEN and pending analysis.
@@ -96,6 +107,9 @@ case "$cmd" in
    ;;
  promote)
    require oc
+   rollouts_cli
+   python3 scripts/full-multi-bootstrap.py preflight \
+     --namespace "$NS" --argocd-namespace "$ARGOCD_NS"
    for tier in mariadb backend front;do
      name="$tier-$INSTANCE"
      phase="$(oc get rollout "$name" -n "$NS" -o jsonpath='{.status.phase}')"
@@ -119,6 +133,9 @@ case "$cmd" in
    oc get svc -n "$NS"
    oc get virtualservices -n "$NS"
    oc get route full-multi -n "$NS"
+   oc -n "$ARGOCD_NS" get application "$APP" \
+     -o custom-columns='NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status,REVISION:.status.sync.revision'
+   oc get rolloutmanager -A
    ;;
  traffic)
    require curl

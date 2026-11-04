@@ -131,8 +131,15 @@ upgrade pattern**.
 
 ## 4. Prerequisites
 
-- A working OpenShift cluster with Argo CD / OpenShift GitOps and Argo Rollouts
-  installed, including the `oc argo rollouts` command.
+**Fresh cluster:** Follow [BOOTSTRAP.md](BOOTSTRAP.md) for the verified
+installation order, Argo Rollouts cluster-scoped `RolloutManager`, database
+Secrets, GitOps/health diagnostics, Istio metrics injection, and separate
+Tempo/Kiali acceptance. A Rollout CRD is **not** proof a controller exists.
+
+
+- A working OpenShift cluster with Argo CD / OpenShift GitOps and an
+  **Available** cluster-scoped Argo Rollouts controller (`RolloutManager`), plus
+  the client-side `oc argo rollouts` plugin for lifecycle commands.
 - OpenShift Service Mesh / Istio gateway injection and sidecar injection enabled
   for namespaces labeled with `istio-discovery: enabled` and
   `istio-injection: enabled`.
@@ -155,13 +162,12 @@ The `full-multi` application resides at `full-multi/`. Its GitOps Application
 manifest is `argocd/application-full-multi.yaml`, and the scripts are in
 `scripts/full-multi*.sh` / `scripts/full-multi*.py`.
 
-If starting from the separately supplied `full-multi` distribution, unpack it
-into the repository root **before** following the rest of this guide:
+The current checkout includes the `full-multi` application; no separate
+six-Rollout ZIP is required. Update your clean `main` checkout first:
 
 ```bash
 cd ~/Documents/POCs/argo-sm
 git pull --ff-only origin main
-unzip -n ~/Downloads/argo_sm_full_multi_6_rollouts_bookshelf.zip -d .
 ```
 
 Validate before publishing or deploying:
@@ -203,16 +209,21 @@ The Secret script creates the namespace and exactly two database credential
 Secrets without putting passwords in Git manifests:
 
 ```bash
-read -rsp 'Bookshelf DB password: ' FULL_MULTI_DB_PASSWORD; echo
-read -rsp 'MariaDB root password: ' FULL_MULTI_DB_ROOT_PASSWORD; echo
-export FULL_MULTI_DB_PASSWORD FULL_MULTI_DB_ROOT_PASSWORD
-bash scripts/full-multi-secrets.sh
-unset FULL_MULTI_DB_PASSWORD FULL_MULTI_DB_ROOT_PASSWORD
+# Zsh example (subshell keeps passwords out of the parent environment):
+(
+  read -rs 'FULL_MULTI_DB_PASSWORD?MariaDB application password: '; echo
+  read -rs 'FULL_MULTI_DB_ROOT_PASSWORD?MariaDB root password: '; echo
+  export FULL_MULTI_DB_PASSWORD FULL_MULTI_DB_ROOT_PASSWORD
+  bash scripts/full-multi-secrets.sh
+)
+oc -n full-multi get secrets db-credentials-a db-credentials-b
 ```
 
-Use distinct, sufficiently strong passwords. The supplied script uses the
-values for A and B; if separate per-application passwords are required, modify
-the Secret workflow deliberately and keep that change outside plaintext Git.
+Use distinct, sufficiently strong application and root passwords. The supplied
+script uses the same pair of values for instances A and B. Rerunning the script
+with both Secrets already present is a **no-op**, even without exported password
+variables. A partial state fails closed. Do not regenerate the credentials for
+an initialized MariaDB database: updating a Secret does not rotate its users.
 
 ### 5.3 Commit and push GitOps sources
 
@@ -241,11 +252,16 @@ INSTANCE=a bash scripts/full-multi.sh deploy
 INSTANCE=a bash scripts/full-multi.sh status
 ```
 
-`deploy` verifies both database Secrets, applies the dedicated Argo CD
-Application, requests a hard refresh, and waits for `main` to synchronize.
-It does **not** prove that all six Rollouts are Ready; inspect the Rollout,
-Pod, and Event status separately. Argo CD is configured with automated sync,
-pruning, and self-healing.
+`deploy` checks both database Secrets **and** an Available cluster-scoped Argo
+Rollouts controller, applies the dedicated Argo CD Application, and requests a
+hard refresh. It reports GitOps revision/sync progress (including terminal
+errors), then waits for all **eight** Rollouts and the ingress gateway to be
+Healthy/available. It verifies the Route is assigned a hostname. Argo CD is
+configured with automated sync, pruning, and self-healing.
+
+`Synced` does **not** imply `Healthy`, and even a Healthy deployment does not
+prove external HTTP responses or Tempo/Kiali trace ingestion. See
+[BOOTSTRAP.md](BOOTSTRAP.md) for the explicit acceptance steps.
 
 ## 6. Prepare, start, and promote
 
@@ -256,8 +272,8 @@ commands, although both still belong to the same GitOps Application.
 
 | Command | Effect |
 |---|---|
-| `validate` | Offline check of the six-Rollout manifest contracts |
-| `deploy` | Create/sync Argo CD Application for `full-multi` |
+| `validate` | Offline check of the eight-Rollout manifest and Istio injection contracts |
+| `deploy` | Preflight controller/Secrets, sync Argo CD, verify gateway and eight-Rollout readiness |
 | `prepare` | Commit BLUE manifests, synchronize, complete/promote baseline Rollouts as required, then clear completed history for the selected three Rollouts |
 | `start` | Commit YELLOW candidate manifests; wait for Front/Backend final canary pauses and MariaDB preview pause |
 | `promote` | Promote the selected application's three Rollouts and wait for Healthy |
@@ -290,6 +306,17 @@ not delete arbitrary Job/Pod logs or resources owned by the other application.
 scripts still require verification against your installed Argo Rollouts
 version. A failed `prepare`/`start`/`promote` is not proof that all three tiers
 were completed; inspect each Rollout.
+
+### Understanding two CRUD and two MariaDB Service paths in Kiali
+
+`crud-a-blue` and `crud-a-green` (and the B equivalents) are two Kubernetes
+**Services that select the same CRUD Pod(s)**. The header-based VirtualService
+labels the requested database target; CRUD then connects to the corresponding
+MariaDB Service. CRUD itself is **not blue-green**. By contrast, MariaDB's
+`*-stable` and `*-canary` Services are Argo Rollouts active/preview services;
+they can point to distinct database Pods and distinct `emptyDir` datasets during
+BLUE/GREEN promotion. Two Kiali service nodes do not imply two CRUD workloads.
+See [BOOTSTRAP.md](BOOTSTRAP.md) for precise selectors and verification.
 
 ## 7. Run traffic and verify header choices
 

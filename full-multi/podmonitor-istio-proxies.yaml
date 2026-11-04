@@ -1,3 +1,6 @@
+# Istio injector supplies scrape=true, port=15020 and /stats/prometheus
+# on observed OSSM 3.5 Pods; never add authored port 15090 annotations.
+# Keep relabelings aligned to injected Pod annotations.
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
 metadata:

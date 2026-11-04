@@ -1,9 +1,25 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-: "${FULL_MULTI_DB_PASSWORD:?FULL_MULTI_DB_PASSWORD is required}"
-: "${FULL_MULTI_DB_ROOT_PASSWORD:?FULL_MULTI_DB_ROOT_PASSWORD is required}"
-# No credentials in shell arguments, Git, or on-disk manifests.
+# Existing credentials are never rotated implicitly. MariaDB's internal passwords
+# would NOT be updated by a Kubernetes Secret overwrite.
 oc apply -f "$(dirname "$0")/../full-multi/namespace.yaml"
+present=0
+for app in a b; do
+  if oc -n full-multi get secret "db-credentials-$app" >/dev/null 2>&1; then
+    present=$((present + 1))
+  fi
+done
+if (( present == 2 )); then
+  echo 'PASS: db-credentials-a and db-credentials-b already exist; left unchanged (no rotation)'
+  exit 0
+fi
+if (( present == 1 )); then
+  echo 'ERROR: Only one database Secret exists; refusing partial overwrite. Inspect both Secrets.' >&2
+  exit 1
+fi
+: "${FULL_MULTI_DB_PASSWORD:?FULL_MULTI_DB_PASSWORD is required for first provision}"
+: "${FULL_MULTI_DB_ROOT_PASSWORD:?FULL_MULTI_DB_ROOT_PASSWORD is required for first provision}"
+# No credentials in shell arguments, Git, or on-disk manifests.
 python3 - <<'PY' | oc apply -f -
 import base64,json,os
 for app in 'ab':

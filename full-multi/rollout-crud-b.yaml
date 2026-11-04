@@ -21,9 +21,6 @@ spec:
         app.kubernetes.io/name: full-multi-crud
         sidecar.istio.io/inject: 'true'
       annotations:
-        prometheus.io/scrape: 'true'
-        prometheus.io/port: '15090'
-        prometheus.io/path: /stats/prometheus
     spec:
       containers:
         - name: crud

@@ -18,9 +18,6 @@ spec:
     metadata:
       annotations:
         demo-rollout-revision: candidate-yellow-20261104T184910Z
-        prometheus.io/scrape: 'true'
-        prometheus.io/port: '15090'
-        prometheus.io/path: /stats/prometheus
       labels:
         app: backend-a
         app.kubernetes.io/name: full-multi-bookshelf

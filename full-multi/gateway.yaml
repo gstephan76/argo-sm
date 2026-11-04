@@ -27,9 +27,6 @@ spec:
     metadata:
       annotations:
         inject.istio.io/templates: gateway
-        prometheus.io/scrape: 'true'
-        prometheus.io/path: /stats/prometheus
-        prometheus.io/port: '15090'
       labels:
         istio: ingressgateway
         app.kubernetes.io/component: full-multi-ingressgateway

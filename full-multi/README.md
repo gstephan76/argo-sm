@@ -762,73 +762,126 @@ done
 At 50/50 on both tiers, expect roughly **25%** in each of BLUE/BLUE,
 BLUE/YELLOW, YELLOW/BLUE, and YELLOW/YELLOW.
 
-### 13.7 Generate an identifiable distributed trace
+### 13.7 Generate a complete distributed trace (with a real root)
 
-A W3C `traceparent` gives you an exact trace ID to retrieve from Tempo.
-This example requests **Application A / Frontend canary / Backend canary /
-BLUE database**:
+For normal HTTP traffic, **do not manually inject `traceparent`**.
+Let the Istio ingress gateway create the root span, then propagate context
+through Frontend, Backend, and CRUD. In this demo the HTTP path normally
+generates **seven Envoy spans across four services**.
+
+A diagnostic command such as `traceparent: 00-${TRACE_ID}-${SPAN_ID}-01`
+does **not** create or export the parent span named by `SPAN_ID`. It only
+asserts an incoming remote context. If `curl` invents that parent, the
+ingress span will reference a parent that Tempo never receives, and the
+OpenShift **Observe → Traces** list correctly shows
+`<root span not yet received>` even though all seven mesh spans appear in
+the waterfall. This was reproduced: manually injected context yielded
+**zero roots and one missing parent**, while ten ordinary requests each
+yielded **seven spans, one root, and zero missing parents**.
+
+Send a normal Application A request using Frontend and Backend canaries
+and the BLUE database (the relevant preview and active revisions must exist):
 
 ```bash
-TRACE_ID="$(openssl rand -hex 16)"
-SPAN_ID="$(openssl rand -hex 8)"
+HOST="$(oc -n full-multi get route full-multi -o jsonpath='{.spec.host}')"
+REQUEST_START="$(($(date +%s) - 5))"
 
 curl -kfsS \
   -H 'x-app-target: a' \
   -H 'x-front-track: canary' \
   -H 'x-backend-track: canary' \
   -H 'x-db-track: blue' \
-  -H "traceparent: 00-${TRACE_ID}-${SPAN_ID}-01" \
   "https://${HOST}/api/books" |
-  jq '{
-    application,
-    frontend_release,
-    backend_release,
-    database_host,
-    first_title: .books[0].title
-  }'
-
-echo "TRACE_ID=$TRACE_ID"
+jq '{
+  application,
+  frontend_release,
+  backend_release,
+  database_host,
+  first_title: .books[0].title
+}'
 ```
 
-Expected: `YELLOW` Frontend, `YELLOW` Backend, MariaDB
-`mariadb-a-stable.full-multi.svc.cluster.local`, and first title
-`Pride and Prejudice`, provided the BLUE active database has not been
-promoted or replaced.
+When YELLOW preview is deployed and BLUE is still active, expect
+YELLOW Frontend / YELLOW Backend and MariaDB at
+`mariadb-a-stable.full-multi.svc.cluster.local` (English books).
+The header selection does not itself depend on a tracing header.
 
-To retrieve that trace, first open a **separate terminal** and keep the
-port-forward running:
+Start the Tempo gateway port-forward in a **separate terminal** and keep
+it running:
 
 ```bash
 oc -n tempo port-forward svc/tempo-mesh-gateway 18080:8080
 ```
 
-Back in the terminal where `TRACE_ID` is defined, authenticate to the `mesh`
-Tempo tenant and fetch the exact trace (the service-account token is
-short-lived; do not print or commit it):
+In the request terminal, obtain a short-lived token and search for recent
+ingress traces. Search results may take a few seconds to become available:
 
 ```bash
 KIALI_TOKEN="$(oc -n istio-system create token \
   kiali-service-account --duration=10m)"
+BASE="https://127.0.0.1:18080/api/traces/v1/mesh/tempo"
 
-curl -ksS --fail \
+curl -kfsSG \
   -H "Authorization: Bearer ${KIALI_TOKEN}" \
-  -o /tmp/full-multi-tempo-trace.json \
-  -w 'Tempo HTTP: %{http_code}\n' \
-  "https://127.0.0.1:18080/api/traces/v1/mesh/tempo/api/traces/${TRACE_ID}"
+  --data-urlencode 'q={ resource.service.name = "full-multi-ingressgateway.full-multi" }' \
+  --data-urlencode "start=${REQUEST_START}" \
+  --data-urlencode "end=$(($(date +%s) + 60))" \
+  --data-urlencode 'limit=30' \
+  "${BASE}/api/search" \
+  -o /tmp/full-multi-tempo-search.json
 
-jq '{
-  batches: (.batches | length),
-  spans: ([.batches[] | (.scopeSpans // .instrumentationLibrarySpans // [])[] |
-           .spans[]?] | length),
-  services: ([.batches[] | .resource.attributes[]? |
-              select(.key == "service.name") | .value.stringValue] | unique)
-}' /tmp/full-multi-tempo-trace.json
+jq -r '.traces[]?.traceID' /tmp/full-multi-tempo-search.json
 ```
 
-A working HTTP path can show seven Envoy spans across the ingress gateway,
-Frontend, Backend, and CRUD; the native MariaDB SQL connection does not
-appear as an HTTP span. A `200` response by itself is not enough: verify the
-`spans` count is positive and inspect the service names.
+Select a trace from the returned IDs. For a quiet demo cluster, the most
+recent trace is usually the request just generated; **in concurrent traffic
+this is not guaranteed to be the same request**. Exact client-to-trace
+correlation requires a real instrumented client or another recorded
+correlation mechanism, not a fabricated `traceparent` parent.
+
+```bash
+TRACE_ID="$(jq -r '
+  (.traces // [])
+  | sort_by((.startTimeUnixNano // "0") | tonumber)
+  | last
+  | .traceID // empty
+' /tmp/full-multi-tempo-search.json)"
+: "${TRACE_ID:?No trace indexed yet; repeat the Tempo search shortly}"
+
+curl -kfsS \
+  -H "Authorization: Bearer ${KIALI_TOKEN}" \
+  "${BASE}/api/traces/${TRACE_ID}" \
+  -o /tmp/full-multi-tempo-trace.json
+
+jq '
+  [.batches[]?.scopeSpans[]?.spans[]?] as $spans
+  | ([$spans[].spanId]) as $ids
+  | {
+      span_count: ($spans | length),
+      root_spans: ([$spans[] | select((.parentSpanId // "") == "")] | length),
+      missing_parents: ([
+        $spans[]
+        | (.parentSpanId // "") as $parent
+        | select($parent != "" and (($ids | index($parent)) == null))
+      ] | length),
+      services: (
+        [.batches[]?.resource.attributes[]?
+         | select(.key == "service.name") | .value.stringValue] | unique
+      )
+    }
+' /tmp/full-multi-tempo-trace.json
+```
+
+Expected for the demonstrated HTTP path: `span_count: 7`,
+`root_spans: 1`, `missing_parents: 0`. MariaDB's native TCP/SQL
+connection does not appear as an HTTP span. A returned HTTP 200 alone does
+not establish trace completeness; check these structural invariants.
+
+If you need a predetermined trace ID, use an OpenTelemetry-instrumented
+client that **creates and exports a real root span** into the same Tempo
+tenant before propagating its W3C context to Istio. Do not modify the
+Collector or fabricate root spans to compensate for a synthetic client
+parent.
 
 ### 13.8 Search the traces in Tempo and verify the Collector
 

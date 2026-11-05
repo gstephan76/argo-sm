@@ -1,5 +1,8 @@
 # `full-multi` fresh OpenShift cluster bootstrap and diagnosis
 
+> **Historical documentation:** This describes the pre-migration eight-Rollout MariaDB BlueGreen topology. For the current six-Rollout/four-StatefulSet topology, follow [README.md](README.md).
+
+
 This is an operator-oriented runbook for a **fresh** OpenShift cluster. The demo
 application is reconciled by Argo CD, while OpenShift Service Mesh, Argo Rollouts,
 OpenTelemetry, Tempo and Kiali are **platform resources**. Do not add shared

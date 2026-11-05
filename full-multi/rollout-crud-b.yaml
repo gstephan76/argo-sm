@@ -7,7 +7,7 @@ metadata:
     argocd.argoproj.io/sync-wave: '1'
 spec:
   replicas: 1
-  revisionHistoryLimit: 2
+  revisionHistoryLimit: 3
   analysis:
     successfulRunHistoryLimit: 2
     unsuccessfulRunHistoryLimit: 2
@@ -16,14 +16,17 @@ spec:
       app: crud-b
   template:
     metadata:
+      annotations:
+        demo-rollout-revision: baseline-blue
       labels:
         app: crud-b
+        demo.crud-track: blue
         app.kubernetes.io/name: full-multi-crud
         sidecar.istio.io/inject: 'true'
     spec:
       containers:
         - name: crud
-          image: ghcr.io/gstephan76/argo-sm-bookshelf:full-multi-crud-v3
+          image: ghcr.io/gstephan76/argo-sm-bookshelf:full-multi-crud-v4
           imagePullPolicy: IfNotPresent
           env:
             - name: APP_ID
@@ -32,10 +35,10 @@ spec:
               value: crud
             - name: MESSAGE_PREFIX
               value: "Application B - CRUD"
-            - name: DB_HOST_STABLE
-              value: mariadb-b-stable.full-multi.svc.cluster.local
-            - name: DB_HOST_CANARY
-              value: mariadb-b-canary.full-multi.svc.cluster.local
+            - name: DB_HOST
+              value: mariadb-b-blue.full-multi.svc.cluster.local
+            - name: DB_TRACK
+              value: blue
             - name: DB_NAME
               value: bookdb
             - name: DB_USER
@@ -72,9 +75,9 @@ spec:
             runAsNonRoot: true
             seccompProfile:
               type: RuntimeDefault
-  # Rolling update: CRUD has one Pod normally, two briefly during an update.
-  # This rollout is independent of the MariaDB BLUE/GREEN lifecycle.
   strategy:
-    canary:
-      maxSurge: 1
-      maxUnavailable: 0
+    blueGreen:
+      activeService: crud-b-active
+      previewService: crud-b-preview
+      autoPromotionEnabled: false
+      scaleDownDelaySeconds: 300

@@ -21,8 +21,6 @@ resources:
   - rollout-crud-b.yaml
   - rollout-front-a.yaml
   - rollout-front-b.yaml
-  - rollout-mariadb-a.yaml
-  - rollout-mariadb-b.yaml
   - service-backend-a-canary.yaml
   - service-backend-a-stable.yaml
   - service-backend-b-canary.yaml
@@ -35,9 +33,17 @@ resources:
   - service-front-a-stable.yaml
   - service-front-b-canary.yaml
   - service-front-b-stable.yaml
-  - service-mariadb-a-canary.yaml
-  - service-mariadb-a-stable.yaml
-  - service-mariadb-b-canary.yaml
-  - service-mariadb-b-stable.yaml
   - telemetry.yaml
   - podmonitor-istio-proxies.yaml
+  - service-crud-a-active.yaml
+  - service-crud-a-preview.yaml
+  - service-crud-b-active.yaml
+  - service-crud-b-preview.yaml
+  - service-mariadb-a-blue.yaml
+  - service-mariadb-a-green.yaml
+  - service-mariadb-b-blue.yaml
+  - service-mariadb-b-green.yaml
+  - statefulset-mariadb-a-blue.yaml
+  - statefulset-mariadb-a-green.yaml
+  - statefulset-mariadb-b-blue.yaml
+  - statefulset-mariadb-b-green.yaml

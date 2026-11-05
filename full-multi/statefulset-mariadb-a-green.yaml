@@ -1,26 +1,24 @@
-apiVersion: argoproj.io/v1alpha1
-kind: Rollout
+apiVersion: apps/v1
+kind: StatefulSet
 metadata:
-  name: mariadb-a
+  name: mariadb-a-green
   namespace: full-multi
   annotations:
-    argocd.argoproj.io/sync-wave: '1'
+    argocd.argoproj.io/sync-wave: '-2'
 spec:
+  serviceName: mariadb-a-green
   replicas: 1
-  revisionHistoryLimit: 2
-  analysis:
-    successfulRunHistoryLimit: 2
-    unsuccessfulRunHistoryLimit: 2
+  updateStrategy:
+    type: RollingUpdate
   selector:
     matchLabels:
-      app: mariadb-a
+      app: mariadb-a-green
   template:
     metadata:
-      annotations:
-        demo-rollout-revision: candidate-yellow-20261104T221329Z
       labels:
-        app: mariadb-a
+        app: mariadb-a-green
         app.kubernetes.io/name: full-multi-mariadb
+        demo.database-track: green
         sidecar.istio.io/inject: 'true'
     spec:
       containers:
@@ -63,7 +61,7 @@ spec:
               cpu: 100m
               memory: 384Mi
             limits:
-              cpu: "1"
+              cpu: '1'
               memory: 1Gi
           securityContext:
             runAsNonRoot: true
@@ -72,12 +70,13 @@ spec:
               drop: [ALL]
             seccompProfile:
               type: RuntimeDefault
-      volumes:
-        - name: mariadb-data
-          emptyDir: {}
-  strategy:
-    blueGreen:
-      activeService: mariadb-a-stable
-      previewService: mariadb-a-canary
-      autoPromotionEnabled: false
-      scaleDownDelaySeconds: 45
+  volumeClaimTemplates:
+    - metadata:
+        name: mariadb-data
+        labels:
+          demo.database: mariadb-a-green
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 4Gi

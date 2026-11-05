@@ -1,31 +1,29 @@
-apiVersion: argoproj.io/v1alpha1
-kind: Rollout
+apiVersion: apps/v1
+kind: StatefulSet
 metadata:
-  name: mariadb-b
+  name: mariadb-b-blue
   namespace: full-multi
   annotations:
-    argocd.argoproj.io/sync-wave: '1'
+    argocd.argoproj.io/sync-wave: '-2'
 spec:
+  serviceName: mariadb-b-blue
   replicas: 1
-  revisionHistoryLimit: 2
-  analysis:
-    successfulRunHistoryLimit: 2
-    unsuccessfulRunHistoryLimit: 2
+  updateStrategy:
+    type: RollingUpdate
   selector:
     matchLabels:
-      app: mariadb-b
+      app: mariadb-b-blue
   template:
     metadata:
-      annotations:
-        demo-rollout-revision: candidate-yellow-20261104T221508Z
       labels:
-        app: mariadb-b
+        app: mariadb-b-blue
         app.kubernetes.io/name: full-multi-mariadb
+        demo.database-track: blue
         sidecar.istio.io/inject: 'true'
     spec:
       containers:
         - name: mariadb
-          image: ghcr.io/gstephan76/argo-sm-mariadb:classicos-brasileiros-20-v1
+          image: ghcr.io/gstephan76/argo-sm-mariadb:english-literature-20-v1
           imagePullPolicy: IfNotPresent
           env:
             - name: MYSQL_DATABASE
@@ -63,7 +61,7 @@ spec:
               cpu: 100m
               memory: 384Mi
             limits:
-              cpu: "1"
+              cpu: '1'
               memory: 1Gi
           securityContext:
             runAsNonRoot: true
@@ -72,12 +70,13 @@ spec:
               drop: [ALL]
             seccompProfile:
               type: RuntimeDefault
-      volumes:
-        - name: mariadb-data
-          emptyDir: {}
-  strategy:
-    blueGreen:
-      activeService: mariadb-b-stable
-      previewService: mariadb-b-canary
-      autoPromotionEnabled: false
-      scaleDownDelaySeconds: 45
+  volumeClaimTemplates:
+    - metadata:
+        name: mariadb-data
+        labels:
+          demo.database: mariadb-b-blue
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 4Gi

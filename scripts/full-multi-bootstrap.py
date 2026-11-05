@@ -11,7 +11,7 @@ import sys
 import time
 
 EXPECTED_ROLLOUTS = {
-    f'{tier}-{instance}' for tier in ('front', 'backend', 'crud', 'mariadb')
+    f'{tier}-{instance}' for tier in ('front', 'backend', 'crud')
     for instance in 'ab'
 }
 
@@ -196,7 +196,22 @@ def wait_ready(ns, timeout, poll):
             pending, degraded = ['ingressgateway: Deployment missing'], []
         else:
             pending, degraded = readiness_report(items, gateway)
-        summary = '; '.join(pending) if pending else 'all eight Rollouts and ingressgateway available'
+        databases = {item['metadata']['name']: item for item in
+                     (oc_json('-n', ns, 'get', 'statefulsets.apps').get('items') or [])}
+        for app in 'ab':
+            for track in ('blue', 'green'):
+                name = f'mariadb-{app}-{track}'
+                db = databases.get(name)
+                if db is None or (db.get('status') or {}).get('readyReplicas', 0) < 1:
+                    pending.append(f'{name}: StatefulSet not Ready')
+        pvcs = oc_json('-n', ns, 'get', 'persistentvolumeclaims').get('items') or []
+        for app in 'ab':
+            for track in ('blue', 'green'):
+                name = f'mariadb-data-mariadb-{app}-{track}-0'
+                pvc = next((x for x in pvcs if x['metadata']['name'] == name), None)
+                if not pvc or (pvc.get('status') or {}).get('phase') != 'Bound':
+                    pending.append(f'{name}: PVC not Bound')
+        summary = '; '.join(pending) if pending else 'all six Rollouts, four databases and ingressgateway available'
         if summary != last_report:
             print('READY  ' + summary, flush=True)
             last_report = summary
@@ -221,13 +236,7 @@ def wait_ready(ns, timeout, poll):
             host = (route.get('spec') or {}).get('host')
             if not host:
                 raise BootstrapError('Route/full-multi has no host')
-            print(f'PASS all eight Rollouts Healthy, gateway available, route=https://{host}', flush=True)
-            for item in sorted(items, key=lambda x: x['metadata']['name']):
-                if item['metadata']['name'].startswith('mariadb-'):
-                    marker = (((item.get('spec') or {}).get('template') or {}).get('metadata') or {}).get('annotations') or {}
-                    marker = marker.get('demo-rollout-revision', 'unknown')
-                    print(f'INFO {item["metadata"]["name"]} initial revision={marker}; '
-                          'deploy does not silently reset the demo to BLUE', flush=True)
+            print(f'PASS all six Rollouts Healthy, gateway available, route=https://{host}', flush=True)
             print('INFO Tempo ingestion and Kiali trace visibility require separate end-to-end checks.', flush=True)
             return
         if time.monotonic() >= deadline:

@@ -31,20 +31,6 @@ func TestPropagateTraceHeaders(t *testing.T) {
 	}
 }
 
-func TestTracks(t *testing.T) {
-	h := http.Header{}
-	if track(h, "x-db-track") != "stable" {
-		t.Fatal("default")
-	}
-	h.Set("x-db-track", "canary")
-	if track(h, "x-db-track") != "canary" {
-		t.Fatal("canary")
-	}
-	h.Set("x-db-track", "other")
-	if track(h, "x-db-track") != "stable" {
-		t.Fatal("unexpected")
-	}
-}
 func TestInfo(t *testing.T) {
 	s := &server{role: "front", app: "A", prefix: "Application A - BLUE"}
 	r := httptest.NewRequest("GET", "/info", nil)
@@ -67,8 +53,8 @@ func TestBackendForwardsToCRUD(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(response{
-			App: "A", DatabaseTrack: "canary",
-			DatabaseHost: "mariadb-a-canary.full-multi.svc.cluster.local",
+			App: "A", DatabaseTrack: "green",
+			DatabaseHost: "mariadb-a-green.full-multi.svc.cluster.local",
 			Books: []book{{ID: 1, Title: "Dom Casmurro", Author: "Machado de Assis", Year: 1899}},
 		})
 	}))
@@ -86,7 +72,7 @@ func TestBackendForwardsToCRUD(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.Backend != "Application A - YELLOW" || got.DatabaseTrack != "canary" || len(got.Books) != 1 {
+	if got.Backend != "Application A - YELLOW" || got.DatabaseTrack != "green" || len(got.Books) != 1 {
 		t.Fatalf("response: %+v", got)
 	}
 }
@@ -107,8 +93,8 @@ func TestReleaseColor(t *testing.T) {
 func TestFrontAndBackendReleaseEvidence(t *testing.T) {
 	crud := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("x-db-track") != "green" { t.Errorf("CRUD lost DB routing header") }
-		_ = json.NewEncoder(w).Encode(response{App:"A", DatabaseTrack:"canary",
-			DatabaseHost:"mariadb-a-canary.full-multi.svc.cluster.local",
+		_ = json.NewEncoder(w).Encode(response{App:"A", DatabaseTrack:"green",
+			DatabaseHost:"mariadb-a-green.full-multi.svc.cluster.local",
 			Books:[]book{{ID:1, Title:"Dom Casmurro", Author:"Machado de Assis",Year:1899}}})
 	}))
 	defer crud.Close()
@@ -134,7 +120,7 @@ func TestFrontAndBackendReleaseEvidence(t *testing.T) {
 		}
 		var got response
 		if err := json.Unmarshal(w.Body.Bytes(), &got);err != nil {t.Fatal(err)}
-		if got.FrontendLabel != "BLUE RELEASE" || got.BackendLabel != "YELLOW RELEASE" || got.FrontendAccent != "#1755c9" || got.BackendAccent != "#d08b00" || got.FrontendRelease != "BLUE" || got.BackendRelease != "YELLOW" || got.FrontendPod != "front-stable-pod" || got.BackendPod != "backend-canary-pod" || got.DatabaseTrack != "canary" {t.Fatalf("JSON: %+v",got)}
+		if got.FrontendLabel != "BLUE RELEASE" || got.BackendLabel != "YELLOW RELEASE" || got.FrontendAccent != "#1755c9" || got.BackendAccent != "#d08b00" || got.FrontendRelease != "BLUE" || got.BackendRelease != "YELLOW" || got.FrontendPod != "front-stable-pod" || got.BackendPod != "backend-canary-pod" || got.DatabaseTrack != "green" {t.Fatalf("JSON: %+v",got)}
 	}
 }
 
@@ -150,4 +136,25 @@ func TestConfigMapThemeLiveReload(t *testing.T) {
     if err:=os.WriteFile(path,modified,0600);err!=nil{t.Fatal(err)}
     if s.theme().Blue.Label!="UPDATED BLUE" {t.Fatal("ConfigMap live update not visible")}
     if s.theme().Blue.Accent!="#1755c9" {t.Fatal("unsafe CSS was accepted")}
+}
+// A request-supplied x-db-track must not select an SQL endpoint in CRUD.
+// SQL binding comes from the pod's immutable DB_HOST/DB_TRACK environment.
+func TestCRUDImmutableDatabaseBinding(t *testing.T) {
+    t.Setenv("ROLE", "crud")
+    t.Setenv("APP_ID", "A")
+    t.Setenv("MESSAGE_PREFIX", "Application A - CRUD")
+    t.Setenv("DB_HOST", "mariadb-a-green.full-multi.svc.cluster.local")
+    t.Setenv("DB_TRACK", "green")
+    s := newServer()
+    if s.dbHost != "mariadb-a-green.full-multi.svc.cluster.local" || s.dbTrack != "green" {
+        t.Fatalf("wrong pod DB binding: %q / %q", s.dbHost, s.dbTrack)
+    }
+    req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+    req.Header.Set("x-db-track", "blue")
+    req.Header.Set("x-crud-db-target", "stable")
+    w := httptest.NewRecorder()
+    s.routes().ServeHTTP(w, req)
+    if w.Code != 200 || s.dbTrack != "green" {
+        t.Fatal("untrusted header changed pod DB identity")
+    }
 }

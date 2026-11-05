@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Safely delete prior completed Rollout-owned history for three tiers of one app."""
+"""Safely delete prior completed Rollout-owned history for the three rollout tiers of one app."""
 import argparse,json,subprocess,time,sys
 NAMESPACE='full-multi'
 FINAL={'Successful','Failed','Inconclusive','Error'}
@@ -16,7 +16,7 @@ def cleanup_one(tier,app,deadline,dry_run):
         marker=sp.get('template',{}).get('metadata',{}).get('annotations',{}).get('demo-rollout-revision')
         env=sp.get('template',{}).get('spec',{}).get('containers',[{}])[0].get('env',[])
         prefix=next((e.get('value') for e in env if e.get('name')=='MESSAGE_PREFIX'),None)
-        if marker!='baseline-blue' or (tier!='mariadb' and prefix!=f'Application {app.upper()} - BLUE'):
+        if marker!='baseline-blue' or (tier in ('front','backend') and prefix!=f'Application {app.upper()} - BLUE'):
             raise RuntimeError(f'{name}: not BLUE')
         if s.get('phase')=='Degraded':raise RuntimeError(f'{name}: degraded')
         good=s.get('phase')=='Healthy' and sp.get('replicas')==1 and s.get('updatedReplicas')==1 and s.get('availableReplicas')==1 and h and h==s.get('currentPodHash')
@@ -55,6 +55,6 @@ if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('--instance',choices=['a','b'],required=True);p.add_argument('--dry-run',action='store_true');p.add_argument('--timeout-seconds',type=int,default=600);a=p.parse_args()
     try:
         deadline=time.monotonic()+a.timeout_seconds
-        for tier in ('mariadb','backend','front'):cleanup_one(tier,a.instance,deadline,a.dry_run)
+        for tier in ('crud','backend','front'):cleanup_one(tier,a.instance,deadline,a.dry_run)
     except Exception as exc:
         print('ERROR:',exc,file=sys.stderr);sys.exit(1)

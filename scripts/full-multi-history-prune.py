@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 
 NS = 'full-multi'
 FINAL = {'Successful', 'Failed', 'Inconclusive', 'Error'}
-TIERS = ('mariadb', 'backend', 'front', 'crud')
+TIERS = ('crud', 'backend', 'front')
 
 
 def oc(*args):

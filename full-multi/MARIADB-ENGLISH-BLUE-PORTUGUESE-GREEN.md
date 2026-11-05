@@ -1,5 +1,8 @@
 # MariaDB datasets: BLUE English / GREEN Brazilian Portuguese
 
+> **Historical documentation:** This describes the pre-migration eight-Rollout MariaDB BlueGreen topology. For the current six-Rollout/four-StatefulSet topology, follow [README.md](README.md).
+
+
 ## Required contract
 
 | Track | Argo Rollouts Service | Source and image | Fresh dataset |

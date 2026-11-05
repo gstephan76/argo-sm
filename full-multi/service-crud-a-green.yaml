@@ -6,7 +6,8 @@ metadata:
 spec:
   selector:
     app: crud-a
+    demo.crud-track: green
   ports:
     - name: http
       port: 8080
-      targetPort: 8080
+      targetPort: http

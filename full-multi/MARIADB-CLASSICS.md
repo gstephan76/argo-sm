@@ -1,5 +1,8 @@
 # MariaDB BLUE/GREEN preview: 20 Brazilian literary classics
 
+> **Historical documentation:** This describes the pre-migration eight-Rollout MariaDB BlueGreen topology. For the current six-Rollout/four-StatefulSet topology, follow [README.md](README.md).
+
+
 This is a **separate MariaDB 10.11 image** for the **GREEN preview** of the
 existing `Rollout/mariadb-a` and `Rollout/mariadb-b`. It is not an HTTP canary
 and does not introduce percentage-based SQL traffic routing.

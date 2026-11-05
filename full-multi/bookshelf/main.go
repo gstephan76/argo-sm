@@ -44,16 +44,10 @@ type response struct {
 	BackendAccent string `json:"backend_accent,omitempty"`
 }
 type server struct {
-	role, app, prefix, hostname, themeFile, backendURL, crudURL, dbStable, dbCanary, dbName, dbUser, dbPassword string
+	role, app, prefix, hostname, themeFile, backendURL, crudURL, dbHost, dbTrack, dbName, dbUser, dbPassword string
 	client                                                                        *http.Client
 }
 
-func track(h http.Header, name string) string {
-	if strings.EqualFold(strings.TrimSpace(h.Get(name)), "canary") {
-		return "canary"
-	}
-	return "stable"
-}
 // Release color is an observed executable revision; colors and display labels
 // are supplied by the projected ConfigMap, not by the incoming routing headers.
 type releaseStyle struct {
@@ -130,7 +124,7 @@ func setReleaseHeaders(h http.Header, out response) {
 }
 
 func newServer() *server {
-	return &server{role: os.Getenv("ROLE"), app: os.Getenv("APP_ID"), prefix: os.Getenv("MESSAGE_PREFIX"), hostname: os.Getenv("HOSTNAME"), themeFile: os.Getenv("BOOKSHELF_THEME_FILE"), backendURL: os.Getenv("BACKEND_API_URL"), crudURL: os.Getenv("CRUD_API_URL"), dbStable: os.Getenv("DB_HOST_STABLE"), dbCanary: os.Getenv("DB_HOST_CANARY"), dbName: os.Getenv("DB_NAME"), dbUser: os.Getenv("DB_USER"), dbPassword: os.Getenv("DB_PASSWORD"), client: &http.Client{Timeout: 8 * time.Second}}
+	return &server{role: os.Getenv("ROLE"), app: os.Getenv("APP_ID"), prefix: os.Getenv("MESSAGE_PREFIX"), hostname: os.Getenv("HOSTNAME"), themeFile: os.Getenv("BOOKSHELF_THEME_FILE"), backendURL: os.Getenv("BACKEND_API_URL"), crudURL: os.Getenv("CRUD_API_URL"), dbHost: os.Getenv("DB_HOST"), dbTrack: os.Getenv("DB_TRACK"), dbName: os.Getenv("DB_NAME"), dbUser: os.Getenv("DB_USER"), dbPassword: os.Getenv("DB_PASSWORD"), client: &http.Client{Timeout: 8 * time.Second}}
 }
 func (s *server) routes() http.Handler {
 	mux := http.NewServeMux()
@@ -234,9 +228,9 @@ func (s *server) books(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid role", 500)
 		return
 	}
-	// This internal header is overwritten by the CRUD Istio VirtualService.
-	// x-db-track itself is intentionally not used to select an SQL endpoint.
-	out, err := s.queryBooks(r.Context(), track(r.Header, "x-crud-db-target"))
+	// SQL database identity belongs to the running Blue/Green CRUD revision,
+	// never to a client-provided request header.
+	out, err := s.queryBooks(r.Context())
 	if err != nil {
 		log.Printf("database query error: %s", err)
 		http.Error(w, "database unavailable", 503)
@@ -245,13 +239,11 @@ func (s *server) books(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)
 }
-func (s *server) queryBooks(ctx context.Context, t string) (response, error) {
-	host := s.dbStable
-	if t == "canary" {
-		host = s.dbCanary
-	}
-	if host == "" {
-		return response{}, errors.New("database host is missing")
+func (s *server) queryBooks(ctx context.Context) (response, error) {
+	host := s.dbHost
+	t := s.dbTrack
+	if host == "" || (t != "blue" && t != "green") {
+		return response{}, errors.New("CRUD database host/track binding is invalid")
 	}
 	cfg := mysql.NewConfig()
 	cfg.User = s.dbUser
@@ -418,6 +410,9 @@ func main() {
 	if s.role == "crud" {
 		if s.prefix != "Application "+s.app+" - CRUD" {
 			log.Fatal("invalid CRUD MESSAGE_PREFIX")
+		}
+		if s.dbHost == "" || (s.dbTrack != "blue" && s.dbTrack != "green") {
+			log.Fatal("CRUD requires immutable DB_HOST and DB_TRACK=blue|green")
 		}
 	} else if s.prefix != "Application "+s.app+" - BLUE" && s.prefix != "Application "+s.app+" - YELLOW" {
 		log.Fatal("invalid MESSAGE_PREFIX")

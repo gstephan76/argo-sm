@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mariadb-a-blue
+  namespace: full-multi
+  annotations:
+    argocd.argoproj.io/sync-wave: '-2'
+spec:
+  serviceName: mariadb-a-blue
+  replicas: 1
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: mariadb-a-blue
+  template:
+    metadata:
+      labels:
+        app: mariadb-a-blue
+        app.kubernetes.io/name: full-multi-mariadb
+        demo.database-track: blue
+        sidecar.istio.io/inject: 'true'
+    spec:
+      containers:
+        - name: mariadb
+          image: ghcr.io/gstephan76/argo-sm-mariadb:english-literature-20-v1
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: MYSQL_DATABASE
+              value: bookdb
+            - name: MYSQL_USER
+              value: bookapp
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials-a
+                  key: password
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials-a
+                  key: root-password
+          ports:
+            - name: mysql
+              containerPort: 3306
+          volumeMounts:
+            - name: mariadb-data
+              mountPath: /var/lib/mysql/data
+          readinessProbe:
+            tcpSocket:
+              port: mysql
+            initialDelaySeconds: 20
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: mysql
+            initialDelaySeconds: 45
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 384Mi
+            limits:
+              cpu: '1'
+              memory: 1Gi
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            seccompProfile:
+              type: RuntimeDefault
+  volumeClaimTemplates:
+    - metadata:
+        name: mariadb-data
+        labels:
+          demo.database: mariadb-a-blue
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 4Gi

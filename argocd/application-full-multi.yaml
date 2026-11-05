@@ -49,3 +49,4 @@ spec:
       - CreateNamespace=true
       - RespectIgnoreDifferences=true
       - ApplyOutOfSyncOnly=true
+      - PruneLast=true

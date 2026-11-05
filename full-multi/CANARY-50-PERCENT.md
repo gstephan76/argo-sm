@@ -1,5 +1,8 @@
 # full-multi: 50% hold-and-promote workflow
 
+> **Historical documentation:** This describes the pre-migration eight-Rollout MariaDB BlueGreen topology. For the current six-Rollout/four-StatefulSet topology, follow [README.md](README.md).
+
+
 This workflow follows the two-lane A/B topology: four HTTP Rollouts
 (`front-a`, `backend-a`, `front-b`, `backend-b`) independently advance from
 BLUE stable to YELLOW candidate, pause at **50% Istio traffic weight**, and

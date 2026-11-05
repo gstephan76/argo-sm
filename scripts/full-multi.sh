@@ -5,7 +5,7 @@ INSTANCE="${INSTANCE:-a}"
 [[ "$INSTANCE" == a || "$INSTANCE" == b ]] || { echo 'INSTANCE must be a or b' >&2; exit 1; }
 NS=full-multi; APP=full-multi; ARGOCD_NS="${ARGOCD_NAMESPACE:-openshift-gitops}"
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-900}"; POLL_SECONDS="${POLL_SECONDS:-5}"
-# 0-based canary pause step: 10/analyze, 25/analyze, 50/analyze, pause.
+# Front/Backend Canary: step 6 pauses at 50%; CRUD BlueGreen has no canary step.
 CANARY_PAUSE_STEP_INDEX=6
 cmd="${1:-help}"
 fail(){ echo "ERROR: $*" >&2; exit 1; }
@@ -31,8 +31,8 @@ ready(){
    if [[ "$phase" == Paused ]]; then
      if [[ "$desired" == paused ]]; then
        # HTTP canaries must reach the indefinite manual pause at 50%.
-       if [[ "$name" == mariadb-* || "$step" == "$CANARY_PAUSE_STEP_INDEX" ]]; then return 0;fi
-     elif [[ "$desired" == healthy && ( "$name" == mariadb-* || "$step" == "$CANARY_PAUSE_STEP_INDEX" ) ]]; then
+       if [[ "$name" == crud-* || "$step" == "$CANARY_PAUSE_STEP_INDEX" ]]; then return 0;fi
+     elif [[ "$desired" == healthy && ( "$name" == crud-* || "$step" == "$CANARY_PAUSE_STEP_INDEX" ) ]]; then
        oc argo rollouts promote "$name" -n "$NS";continue
      fi
    fi
@@ -56,7 +56,7 @@ rollouts_cli(){
 commit_stage(){
  local color="$1"
  python3 scripts/full-multi-spec.py set --instance "$INSTANCE" --color "$color"
- git add full-multi/rollout-front-"$INSTANCE".yaml full-multi/rollout-backend-"$INSTANCE".yaml full-multi/rollout-mariadb-"$INSTANCE".yaml
+ git add full-multi/rollout-front-"$INSTANCE".yaml full-multi/rollout-backend-"$INSTANCE".yaml full-multi/rollout-crud-"$INSTANCE".yaml
  git diff --cached --check
  if ! git diff --cached --quiet;then
    git commit -m "Set full-multi instance $INSTANCE $color"
@@ -96,13 +96,13 @@ case "$cmd" in
      commit_stage yellow
    fi
    sync_git
-   for tier in mariadb backend front;do ready "$tier-$INSTANCE" "$([[ "$cmd" == prepare ]] && echo healthy || echo paused)";done
+   for tier in crud backend front;do ready "$tier-$INSTANCE" "$([[ "$cmd" == prepare ]] && echo healthy || echo paused)";done
    if [[ "$cmd" == prepare ]];then
      python3 scripts/full-multi-history-reset.py --instance "$INSTANCE" --timeout-seconds "$TIMEOUT_SECONDS"
-     python3 scripts/full-multi-history-prune.py --instance "$INSTANCE" --tier crud
+     echo "CRUD history pruning is included in the selected lifecycle tiers"
      echo "PASS: Full-multi $INSTANCE BLUE prepared; history reset"
    else
-     echo "PASS: Full-multi $INSTANCE Front/Backend paused at 50% (MariaDB preview ready); run promote"
+     echo "PASS: Full-multi $INSTANCE Front/Backend paused at 50% (CRUD Green preview ready; MariaDB StatefulSets unchanged); run promote"
    fi
    ;;
  promote)
@@ -110,11 +110,11 @@ case "$cmd" in
    rollouts_cli
    python3 scripts/full-multi-bootstrap.py preflight \
      --namespace "$NS" --argocd-namespace "$ARGOCD_NS"
-   for tier in mariadb backend front;do
+   for tier in crud backend front;do
      name="$tier-$INSTANCE"
      phase="$(oc get rollout "$name" -n "$NS" -o jsonpath='{.status.phase}')"
      if [[ "$phase" == Paused ]];then
-       if [[ "$name" != mariadb-* ]];then
+       if [[ "$name" != crud-* ]];then
          step="$(oc get rollout "$name" -n "$NS" -o jsonpath='{.status.currentStepIndex}')"
          [[ "$step" == "$CANARY_PAUSE_STEP_INDEX" ]] || fail "$name paused at step=$step; expected 50% pause step=$CANARY_PAUSE_STEP_INDEX"
        fi
@@ -142,11 +142,12 @@ case "$cmd" in
    host="$(oc get route full-multi -n "$NS" -o jsonpath='{.spec.host}')"
    front_track="${FRONT_TRACK:-stable}"
    backend_track="${BACKEND_TRACK:-stable}"
-   db_track="${DB_TRACK:-stable}"
+   db_track="${DB_TRACK:-active}"
    [[ "$front_track" =~ ^(stable|canary|weighted)$ ]] || fail 'FRONT_TRACK must be stable|canary|weighted'
    [[ "$backend_track" =~ ^(stable|canary|weighted)$ ]] || fail 'BACKEND_TRACK must be stable|canary|weighted'
-   [[ "$db_track" =~ ^(stable|canary|blue|green)$ ]] || fail 'DB_TRACK must be stable|canary|blue|green'
-   headers=(-H "x-app-target: $INSTANCE" -H "x-db-track: $db_track")
+   [[ "$db_track" =~ ^(stable|canary|blue|green|active)$ ]] || fail 'DB_TRACK must be stable|canary|blue|green|active'
+   headers=(-H "x-app-target: $INSTANCE")
+   [[ "$db_track" == active ]] || headers+=(-H "x-db-track: $db_track")
    [[ "$front_track" == weighted ]] || headers+=(-H "x-front-track: $front_track")
    [[ "$backend_track" == weighted ]] || headers+=(-H "x-backend-track: $backend_track")
    for ((i=1;i<=${REQUESTS:-30};i++));do
@@ -156,7 +157,7 @@ case "$cmd" in
    ;;
  help|-h|--help)
    echo 'Usage: INSTANCE=a|b bash scripts/full-multi.sh validate|deploy|prepare|start|promote|cleanup|traffic|status'
-   echo 'Set FRONT_TRACK/BACKEND_TRACK=stable|canary|weighted and DB_TRACK=blue|green (or stable|canary).'
+   echo 'Set FRONT_TRACK/BACKEND_TRACK=stable|canary|weighted and DB_TRACK=active|blue|green (or stable|canary).'
    echo 'weighted omits that tier header and lets Istio enforce 50/50 at the canary pause.'
    ;;
  *)fail "Unknown command $cmd";;

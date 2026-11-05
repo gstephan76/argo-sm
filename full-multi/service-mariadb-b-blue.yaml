@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mariadb-b-blue
+  namespace: full-multi
+  annotations:
+    argocd.argoproj.io/sync-wave: '-2'
+spec:
+  clusterIP: None
+  selector:
+    app: mariadb-b-blue
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: mysql

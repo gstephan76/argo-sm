@@ -267,15 +267,8 @@ func (s *server) queryBooks(ctx context.Context) (response, error) {
 	if err = db.PingContext(c); err != nil {
 		return response{}, err
 	}
-	_, err = db.ExecContext(c, `CREATE TABLE IF NOT EXISTS books (id INT PRIMARY KEY, title VARCHAR(200) NOT NULL, author VARCHAR(200) NOT NULL, year INT NOT NULL)`)
-	if err != nil {
-		return response{}, err
-	}
-	for _, b := range []book{{1, "The Hobbit", "J. R. R. Tolkien", 1937}, {2, "Dune", "Frank Herbert", 1965}, {3, "Foundation", "Isaac Asimov", 1951}} {
-		if _, err = db.ExecContext(c, "INSERT IGNORE INTO books (id,title,author,year) VALUES (?,?,?,?)", b.ID, b.Title, b.Author, b.Year); err != nil {
-			return response{}, err
-		}
-	}
+	// The 20 books are seeded during MariaDB initialization.
+	// Application requests must never modify the database.
 	rows, err := db.QueryContext(c, "SELECT id,title,author,year FROM books ORDER BY id LIMIT 100")
 	if err != nil {
 		return response{}, err

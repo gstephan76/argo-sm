@@ -26,7 +26,7 @@ spec:
     spec:
       containers:
         - name: crud
-          image: ghcr.io/gstephan76/argo-sm-bookshelf:full-multi-crud-v4
+          image: ghcr.io/gstephan76/argo-sm-bookshelf:full-multi-crud-v5
           imagePullPolicy: IfNotPresent
           env:
             - name: APP_ID

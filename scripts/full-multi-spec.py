@@ -45,7 +45,7 @@ def verify():
         track=match.group(1)
         assert f'              value: mariadb-{app}-{track}.full-multi.svc.cluster.local' in cr
         assert f'              value: {track}\n' in cr
-        assert 'full-multi-crud-v4' in cr
+        assert 'full-multi-crud-v5' in cr
         for tr,image in DB_IMAGES.items():
             ss=(D/f'statefulset-mariadb-{app}-{tr}.yaml').read_text()
             svc=(D/f'service-mariadb-{app}-{tr}.yaml').read_text()
@@ -72,6 +72,9 @@ def verify():
     go=(D/'bookshelf/main.go').read_text()
     assert 'os.Getenv("DB_HOST")' in go and 'os.Getenv("DB_TRACK")' in go
     assert 's.queryBooks(r.Context())' in go and 'x-crud-db-target' not in go
+    assert 'db.ExecContext(' not in go, 'CRUD must not execute database writes'
+    assert 'INSERT IGNORE INTO books' not in go, 'CRUD must not insert books'
+    assert 'CREATE TABLE IF NOT EXISTS books' not in go, 'CRUD must not modify schema'
     assert 'traceparent' in go and 'propagateTraceHeaders' in go
     assert 'otel-tracing' in (D/'telemetry.yaml').read_text()
     assert (D/'podmonitor-istio-proxies.yaml').exists()

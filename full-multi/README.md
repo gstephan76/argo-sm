@@ -79,7 +79,7 @@ Podman/Docker, and validation additionally supports `go` and `skopeo`.
 The new application image is:
 
 ```text
-ghcr.io/gstephan76/argo-sm-bookshelf:full-multi-crud-v4
+ghcr.io/gstephan76/argo-sm-bookshelf:full-multi-crud-v5
 ```
 
 It changes CRUD from per-request SQL selection to one immutable
@@ -89,7 +89,7 @@ GitOps manifest commit:
 ```bash
 cd ~/Documents/POCs/argo-sm
 bash scripts/build-push-full-multi-crud.sh
-skopeo inspect --no-creds docker://ghcr.io/gstephan76/argo-sm-bookshelf:full-multi-crud-v4
+skopeo inspect --no-creds docker://ghcr.io/gstephan76/argo-sm-bookshelf:full-multi-crud-v5
 ```
 
 Also verify both database images are pullable:
@@ -292,7 +292,7 @@ restarts, but removal/formatting of a PVC destroys that dataset.
 | Blue HTTP 503 after promotion | Expected once the old Blue CRUD ReplicaSet scales down; omit `x-db-track` for the promoted path |
 | Database unavailable | `oc -n full-multi get sts,pvc,pods`; wrong DB_HOST, missing Secret, or PVC Pending |
 | Green shows English | Validate `DB_TRACK/DB_HOST` in **serving** CRUD pod and pre-seeded data in the Green DB PVC |
-| ImagePullBackOff | Publish the new `full-multi-crud-v4` image before GitOps cutover |
+| ImagePullBackOff | Publish the new `full-multi-crud-v5` image before GitOps cutover |
 | Argo CD sync failure | Check app sync, resource health, prune ordering and ownership conflicts |
 | `start` does not pause | Inspect CRUD BlueGreen preview and Front/Backend canary steps independently |
 | Kiali shows no MySQL spans | SQL/TCP lacks application-level DB tracing by default |

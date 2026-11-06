@@ -295,15 +295,15 @@ def wait_blue_rollouts(timeout=900):
                     observed[name] = current
                 if phase == "Degraded":
                     raise Failure(f"{name}: Degraded; examine events/analysis and correct root cause before retrying")
-                if status.get("observedGeneration", 0) < meta.get("generation", 1):
+                if int(status.get("observedGeneration") or 0) < int(meta.get("generation") or 1):
                     continue
                 if phase == "Paused":
-                    if role != "crud" and status.get("currentStepIndex") != 6:
+                    if role != "crud" and int(status.get("currentStepIndex") or 0) != 6:
                         raise Failure(f"{name}: unexpected Canary pause step {status.get('currentStepIndex')}; refusing auto promotion")
                     call(["oc", "argo", "rollouts", "promote", name, "-n", "full-multi"], timeout=60)
                 elif (phase == "Healthy" and status.get("stableRS") and
                       status.get("stableRS") == status.get("currentPodHash") and
-                      status.get("availableReplicas", 0) >= r.get("spec", {}).get("replicas", 1)):
+                      int(status.get("availableReplicas") or 0) >= int(r.get("spec", {}).get("replicas", 1))):
                     done.add(name)
                     log(f"PASS {name}: Blue Healthy")
         if len(done) == 6:
@@ -483,7 +483,7 @@ def paused_e2e():
             item = rollout(f"{role}-{app}")
             phase = item.get("status", {}).get("phase")
             step = item.get("status", {}).get("currentStepIndex")
-            if phase != "Paused" or step != 6:
+            if phase != "Paused" or int(step or 0) != 6:
                 raise Failure(f"{role}-{app}: expected Canary 50% pause (phase={phase}, step={step})")
     log("PASS E2E PAUSED: Front/Backend 50%, CRUD Blue active + Green preview for both independent applications")
 

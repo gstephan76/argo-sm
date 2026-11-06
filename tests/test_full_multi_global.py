@@ -77,6 +77,27 @@ class GlobalWorkflowTests(unittest.TestCase):
         self.assertIn('full-multi-validate-data-paths.sh', src)
         self.assertIn('INSTANCE="$app" bash', src)
 
+
+    def test_string_numeric_rollout_status(self):
+        def fake_rollout(name):
+            return {
+                "metadata": {"generation": 5},
+                "spec": {"replicas": 1},
+                "status": {
+                    "phase": "Healthy",
+                    "observedGeneration": "5",
+                    "availableReplicas": "1",
+                    "stableRS": "stable-hash",
+                    "currentPodHash": "stable-hash",
+                },
+            }
+
+        with patch.object(M, "rollout", side_effect=fake_rollout), \
+             patch.object(M, "blue_template", return_value=True), \
+             patch.object(M, "call") as commands:
+            M.wait_blue_rollouts(timeout=5)
+            commands.assert_not_called()
+
     def test_sm_branch_rejection(self):
         with patch.object(M, "git", side_effect=["main", "https://github.com/gstephan76/SM.git"]):
             with self.assertRaises(M.Failure):

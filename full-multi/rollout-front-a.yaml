@@ -17,7 +17,7 @@ spec:
   template:
     metadata:
       annotations:
-        demo-rollout-revision: candidate-yellow-20261104T221329Z
+        demo-rollout-revision: baseline-blue
       labels:
         app: front-a
         app.kubernetes.io/name: full-multi-bookshelf
@@ -41,7 +41,7 @@ spec:
             - name: ROLE
               value: "front"
             - name: MESSAGE_PREFIX
-              value: "Application A - YELLOW"
+              value: "Application A - BLUE"
             - name: BACKEND_API_URL
               value: "http://backend-a-stable.full-multi.svc.cluster.local:5000/api/books"
           ports:
@@ -90,19 +90,19 @@ spec:
               - templateName: smoke-front-a
             args:
               - name: expected-color
-                value: YELLOW
+                value: BLUE
         - setWeight: 25
         - analysis:
             templates:
               - templateName: smoke-front-a
             args:
               - name: expected-color
-                value: YELLOW
+                value: BLUE
         - setWeight: 50
         - analysis:
             templates:
               - templateName: smoke-front-a
             args:
               - name: expected-color
-                value: YELLOW
+                value: BLUE
         - pause: {}

@@ -13,10 +13,19 @@ NAMESPACE = 'full-multi'
 class Refusal(RuntimeError): pass
 
 def sql(pod, query, root=False):
-    pwd='$MYSQL_ROOT_PASSWORD' if root else '$MYSQL_PASSWORD'
-    user='root' if root else '$MYSQL_USER'
-    # The SQL is passed as a positional parameter, not evaluated as shell code.
-    shell=f'set -eu; MYSQL_PWD="{pwd}" mysql -u "{user}" --database="$MYSQL_DATABASE" --default-character-set=utf8mb4 -N -B -e "$1"'
+    # The SCL MariaDB image supports passwordless local root socket access.
+    # Application queries use their configured credentials.
+    # The SQL is passed as a positional parameter, never evaluated as shell code.
+    if root:
+        shell = ('set -eu; unset MYSQL_PWD; '
+                 'mysql --protocol=socket -u root '
+                 '--database="$MYSQL_DATABASE" '
+                 '--default-character-set=utf8mb4 -N -B -e "$1"')
+    else:
+        shell = ('set -eu; MYSQL_PWD="$MYSQL_PASSWORD" '
+                 'mysql -u "$MYSQL_USER" '
+                 '--database="$MYSQL_DATABASE" '
+                 '--default-character-set=utf8mb4 -N -B -e "$1"')
     command=['oc','-n',NAMESPACE,'exec',pod,'-c','mariadb','--',
              'sh','-c',shell,'sh',query]
     r=subprocess.run(command, capture_output=True, text=True, timeout=60)

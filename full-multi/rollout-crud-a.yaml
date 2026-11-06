@@ -17,10 +17,10 @@ spec:
   template:
     metadata:
       annotations:
-        demo-rollout-revision: baseline-blue
+        demo-rollout-revision: candidate-yellow-20261106T183134Z
       labels:
         app: crud-a
-        demo.crud-track: blue
+        demo.crud-track: green
         app.kubernetes.io/name: full-multi-crud
         sidecar.istio.io/inject: 'true'
     spec:
@@ -36,9 +36,9 @@ spec:
             - name: MESSAGE_PREFIX
               value: "Application A - CRUD"
             - name: DB_HOST
-              value: mariadb-a-blue.full-multi.svc.cluster.local
+              value: mariadb-a-green.full-multi.svc.cluster.local
             - name: DB_TRACK
-              value: blue
+              value: green
             - name: DB_NAME
               value: bookdb
             - name: DB_USER

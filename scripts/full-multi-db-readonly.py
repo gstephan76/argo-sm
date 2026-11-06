@@ -16,7 +16,7 @@ def sql(pod, query, root=False):
     pwd='$MYSQL_ROOT_PASSWORD' if root else '$MYSQL_PASSWORD'
     user='root' if root else '$MYSQL_USER'
     # The SQL is passed as a positional parameter, not evaluated as shell code.
-    shell=f'set -eu; MYSQL_PWD="{pwd}" mysql -u "{user}" --default-character-set=utf8mb4 -N -B -e "$1"'
+    shell=f'set -eu; MYSQL_PWD="{pwd}" mysql -u "{user}" --database="$MYSQL_DATABASE" --default-character-set=utf8mb4 -N -B -e "$1"'
     command=['oc','-n',NAMESPACE,'exec',pod,'-c','mariadb','--',
              'sh','-c',shell,'sh',query]
     r=subprocess.run(command, capture_output=True, text=True, timeout=60)

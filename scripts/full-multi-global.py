@@ -456,7 +456,8 @@ def rebaseline(args, *, verified=False):
     call(["oc", "argo", "rollouts", "version"], timeout=35)
     call([sys.executable, "scripts/full-multi-bootstrap.py", "preflight"], cwd=ROOT, timeout=70)
     verify_db_volumes()
-    # Setup/prepare do not change SQL content; verify app credentials as a gate.
+    # Reconcile SELECT-only database permissions before resetting the Rollouts.
+    call(["bash", "scripts/full-multi-db-readonly.sh", "--apply"], cwd=ROOT, timeout=500)
     call(["bash", "scripts/full-multi-db-readonly.sh", "--verify"], cwd=ROOT, timeout=500)
     abort_pending_rollouts()
     target = commit_blue()

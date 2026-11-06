@@ -70,8 +70,8 @@ class GlobalWorkflowTests(unittest.TestCase):
             c.assert_not_called()
 
     def test_global_start_invokes_inbuilt_gate(self):
-        installer = Path(__file__).resolve().parents[1] / 'install_global_workflows.py'
-        src = installer.read_text(encoding='utf-8')
+        workflow = Path(__file__).resolve().parents[1] / 'scripts/full-multi.sh'
+        src = workflow.read_text(encoding='utf-8')
         self.assertIn('full-multi-crud-pause-gate.py', src)
         self.assertIn('--instance all', src)
         self.assertIn('full-multi-validate-data-paths.sh', src)

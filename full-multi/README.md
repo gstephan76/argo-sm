@@ -66,10 +66,8 @@ For **each** application, run `prepare` then `start` once:
 ```bash
 INSTANCE=a bash scripts/full-multi.sh prepare
 INSTANCE=b bash scripts/full-multi.sh prepare
-INSTANCE=a bash scripts/full-multi.sh start
-INSTANCE=b bash scripts/full-multi.sh start
-python3 scripts/full-multi-crud-pause-gate.py --instance all
-bash scripts/full-multi-validate-data-paths.sh --preview
+# Start both applications and run the complete pause + four-database gate automatically.
+bash scripts/full-multi.sh start
 ```
 
 `prepare` establishes a Blue active baseline. If a previous Green revision was

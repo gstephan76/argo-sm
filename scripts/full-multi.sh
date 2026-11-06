@@ -1,6 +1,20 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)";cd "$ROOT"
+# `start` with no INSTANCE explicitly set starts both independent applications.
+# Each targeted start verifies its own paused Blue/Green HTTP + SQL paths;
+# after BOTH are running, re-check all four independent PVCs/endpoints.
+# A failed A or B stops immediately. No automatic promotion is performed.
+if [[ "${1:-help}" == start && "${INSTANCE:-all}" == all ]]; then
+  for app in a b; do
+    echo "== full-multi: starting application ${app^^} =="
+    INSTANCE="$app" bash "$ROOT/scripts/full-multi.sh" start
+  done
+  python3 "$ROOT/scripts/full-multi-crud-pause-gate.py" --instance all
+  bash "$ROOT/scripts/full-multi-validate-data-paths.sh" --preview
+  echo 'PASS: both independent applications started; CRUD-A/B Paused indefinitely, 4 MariaDB volumes isolated'
+  exit 0
+fi
 INSTANCE="${INSTANCE:-a}"
 [[ "$INSTANCE" == a || "$INSTANCE" == b ]] || { echo 'INSTANCE must be a or b' >&2; exit 1; }
 NS=full-multi; APP=full-multi; ARGOCD_NS="${ARGOCD_NAMESPACE:-openshift-gitops}"

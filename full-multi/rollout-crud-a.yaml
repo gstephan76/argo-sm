@@ -79,5 +79,8 @@ spec:
     blueGreen:
       activeService: crud-a-active
       previewService: crud-a-preview
+      # Blue remains active; Green keeps a full replica until explicit promotion.
       autoPromotionEnabled: false
+      previewReplicaCount: 1
+      # Applies only AFTER explicit promotion; never during pause.
       scaleDownDelaySeconds: 300

@@ -163,7 +163,7 @@ def cleanup_one(tier, app, dry_run):
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--instance', choices=('a', 'b'), required=True)
-    p.add_argument('--tier', choices=TIERS, action='append', help='Default: all four tiers')
+    p.add_argument('--tier', choices=TIERS, action='append', help='Default: all three Rollout tiers')
     p.add_argument('--dry-run', action='store_true', help='Show targets without deleting')
     args = p.parse_args()
     try:

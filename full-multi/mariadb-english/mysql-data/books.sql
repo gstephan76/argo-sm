@@ -1,6 +1,6 @@
 -- BLUE baseline: 20 British English-language literary classics.
 -- Only loaded on first initialization of an empty MariaDB data directory.
--- IDs 1-3 supersede the CRUD application's INSERT IGNORE fallback demo books.
+-- IDs 1-3 are ordinary pre-seeded books; CRUD only performs SELECT queries.
 SET NAMES utf8mb4;
 CREATE TABLE IF NOT EXISTS books (
     id INT PRIMARY KEY,

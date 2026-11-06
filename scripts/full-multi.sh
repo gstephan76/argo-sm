@@ -27,13 +27,27 @@ ready(){
      echo "ROLLOUT $name phase=${phase:-Unreconciled} step=${step:-none} desired=$desired"
      previous="$phase/$step"
    fi
-   if [[ "$phase" == Healthy ]]; then [[ "$desired" == healthy ]] && return 0;fi
-   if [[ "$phase" == Paused ]]; then
-     if [[ "$desired" == paused ]]; then
-       # HTTP canaries must reach the indefinite manual pause at 50%.
-       if [[ "$name" == crud-* || "$step" == "$CANARY_PAUSE_STEP_INDEX" ]]; then return 0;fi
-     elif [[ "$desired" == healthy && ( "$name" == crud-* || "$step" == "$CANARY_PAUSE_STEP_INDEX" ) ]]; then
-       oc argo rollouts promote "$name" -n "$NS";continue
+   if [[ "$phase" == Healthy && "$desired" == healthy ]];then
+     if [[ "$cmd" == prepare ]];then
+       marker="$(oc -n "$NS" get rollout "$name" -o jsonpath='{.spec.template.metadata.annotations.demo-rollout-revision}')"
+       generation="$(oc -n "$NS" get rollout "$name" -o jsonpath='{.metadata.generation}')"
+       observed="$(oc -n "$NS" get rollout "$name" -o jsonpath='{.status.observedGeneration}')"
+       [[ "$marker" == baseline-blue ]] || fail "$name: expected Blue baseline, got $marker"
+       if [[ "$observed" != "$generation" ]];then sleep "$POLL_SECONDS";continue;fi
+     fi
+     return 0
+   fi
+   if [[ "$phase" == Paused ]];then
+     if [[ "$desired" == paused ]];then
+       # HTTP canaries must reach 50%; CRUD pauses without a timer.
+       if [[ "$name" == crud-* || "$step" == "$CANARY_PAUSE_STEP_INDEX" ]];then return 0;fi
+     elif [[ "$desired" == healthy && "$cmd" == prepare ]];then
+       # An explicit PREPARE operation may rebaseline Blue; never promote a
+       # YELLOW/GREEN candidate under the guise of returning to health.
+       marker="$(oc -n "$NS" get rollout "$name" -o jsonpath='{.spec.template.metadata.annotations.demo-rollout-revision}')"
+       [[ "$marker" == baseline-blue ]] || fail "$name: refuse to promote non-Blue marker=$marker"
+       oc argo rollouts promote "$name" -n "$NS"
+       continue
      fi
    fi
    [[ "$phase" != Degraded ]] || fail "$name degraded"
@@ -45,9 +59,18 @@ sync_git(){
  local wanted
  wanted="$(git rev-parse HEAD)"
  oc annotate application "$APP" -n "$ARGOCD_NS" argocd.argoproj.io/refresh=hard --overwrite >/dev/null
- python3 scripts/full-multi-bootstrap.py wait-sync \
-   --application "$APP" --argocd-namespace "$ARGOCD_NS" \
-   --revision "$wanted" --timeout "$TIMEOUT_SECONDS" --poll "$POLL_SECONDS"
+ # Old MariaDB Rollouts are deliberately retained with prune=false.
+   # In that protected state revision observation + real workload gates are
+   # required; an unconditional Synced check may never succeed.
+   pruning="$(oc -n "$ARGOCD_NS" get application "$APP" -o jsonpath='{.spec.syncPolicy.automated.prune}')"
+   if [[ "$pruning" == false ]];then
+     python3 scripts/full-multi-wait-gitops-revision.py --revision "$wanted" \
+       --timeout "$TIMEOUT_SECONDS" --poll "$POLL_SECONDS"
+   else
+     python3 scripts/full-multi-bootstrap.py wait-sync \
+       --application "$APP" --argocd-namespace "$ARGOCD_NS" \
+       --revision "$wanted" --timeout "$TIMEOUT_SECONDS" --poll "$POLL_SECONDS"
+   fi
 }
 rollouts_cli(){
  oc argo rollouts version >/dev/null 2>&1 || \
@@ -89,20 +112,38 @@ case "$cmd" in
      --namespace "$NS" --argocd-namespace "$ARGOCD_NS"
    oc get application "$APP" -n "$ARGOCD_NS" >/dev/null || fail 'Run deploy first'
    if [[ "$cmd" == prepare ]];then
-     # Retire only superseded revisions; preserve live BLUE/GREEN and pending analysis.
+     # Refuse to overwrite the deliberately paused GREEN demo preview. A
+     # technical BLUE-to-BLUE image update (such as CRUD v5) is allowed here.
+     phase="$(oc -n "$NS" get rollout "crud-$INSTANCE" -o jsonpath='{.status.phase}')"
+     if [[ "$phase" == Paused ]];then
+       track="$(oc -n "$NS" get rollout "crud-$INSTANCE" -o jsonpath='{.spec.template.metadata.labels.demo\.crud-track}')"
+       [[ "$track" == blue ]] || fail "crud-$INSTANCE has a paused GREEN preview; promote it explicitly after the demo before preparing"
+     fi
      python3 scripts/full-multi-history-prune.py --instance "$INSTANCE"
      commit_stage blue
    else
+     # Do not replace an existing preview or silently promote BlueGreen.
+     phase="$(oc -n "$NS" get rollout "crud-$INSTANCE" -o jsonpath='{.status.phase}')"
+     [[ "$phase" == Healthy ]] || fail "crud-$INSTANCE must be Healthy/Blue before start (phase=$phase)"
+     color="$(oc -n "$NS" get rollout "crud-$INSTANCE" -o jsonpath='{.spec.template.metadata.labels.demo\.crud-track}')"
+     [[ "$color" == blue ]] || fail "crud-$INSTANCE must have Blue baseline before start (track=$color)"
+     # Read-only MariaDB grants are mandatory before opening Green preview.
+     bash scripts/full-multi-db-readonly.sh --verify
      commit_stage yellow
    fi
    sync_git
    for tier in crud backend front;do ready "$tier-$INSTANCE" "$([[ "$cmd" == prepare ]] && echo healthy || echo paused)";done
+   if [[ "$cmd" == start ]];then
+     python3 scripts/full-multi-crud-pause-gate.py --instance "$INSTANCE"
+     # HTTP + SQL verification for this application's two independent paths.
+     bash scripts/full-multi-validate-data-paths.sh --instance "$INSTANCE"
+   fi
    if [[ "$cmd" == prepare ]];then
      python3 scripts/full-multi-history-reset.py --instance "$INSTANCE" --timeout-seconds "$TIMEOUT_SECONDS"
      echo "CRUD history pruning is included in the selected lifecycle tiers"
      echo "PASS: Full-multi $INSTANCE BLUE prepared; history reset"
    else
-     echo "PASS: Full-multi $INSTANCE Front/Backend paused at 50% (CRUD Green preview ready; MariaDB StatefulSets unchanged); run promote"
+     echo "PASS: Full-multi $INSTANCE Front/Backend paused at 50%; CRUD Blue active and Green preview BOTH ready and Paused indefinitely. Promote only by explicit command."
    fi
    ;;
  promote)
@@ -110,6 +151,18 @@ case "$cmd" in
    rollouts_cli
    python3 scripts/full-multi-bootstrap.py preflight \
      --namespace "$NS" --argocd-namespace "$ARGOCD_NS"
+   # GREEN preview promotion requires strict concurrent Blue/Green evidence.
+   # A pre-demo BLUE-to-BLUE image upgrade remains explicitly promotable too.
+   phase="$(oc -n "$NS" get rollout "crud-$INSTANCE" -o jsonpath='{.status.phase}')"
+   if [[ "$phase" == Paused ]];then
+     track="$(oc -n "$NS" get rollout "crud-$INSTANCE" -o jsonpath='{.spec.template.metadata.labels.demo\.crud-track}')"
+     if [[ "$track" == green ]];then
+       python3 scripts/full-multi-crud-pause-gate.py --instance "$INSTANCE"
+     else
+       [[ "$track" == blue ]] || fail "crud-$INSTANCE unexpected paused track=$track"
+       echo "Promoting a pre-demo BLUE revision upgrade (no GREEN preview yet)"
+     fi
+   fi
    for tier in crud backend front;do
      name="$tier-$INSTANCE"
      phase="$(oc get rollout "$name" -n "$NS" -o jsonpath='{.status.phase}')"
@@ -136,6 +189,11 @@ case "$cmd" in
    oc -n "$ARGOCD_NS" get application "$APP" \
      -o custom-columns='NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status,REVISION:.status.sync.revision'
    oc get rolloutmanager -A
+   echo 'CRUD paused safety gate (reports errors only when a rollout is paused):'
+   for app in a b;do
+     phase="$(oc -n "$NS" get rollout "crud-$app" -o jsonpath='{.status.phase}')"
+     if [[ "$phase" == Paused ]];then python3 scripts/full-multi-crud-pause-gate.py --instance "$app";fi
+   done
    ;;
  traffic)
    require curl

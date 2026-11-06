@@ -37,6 +37,9 @@ def verify():
         assert f'      activeService: crud-{app}-active' in cr
         assert f'      previewService: crud-{app}-preview' in cr
         assert '      autoPromotionEnabled: false' in cr
+        assert '      previewReplicaCount: 1' in cr
+        assert 'autoPromotionSeconds:' not in cr
+        assert '      scaleDownDelaySeconds: 300' in cr
         assert '            - name: DB_HOST\n' in cr
         assert '            - name: DB_TRACK\n' in cr
         assert 'DB_HOST_CANARY' not in cr and 'DB_HOST_STABLE' not in cr
@@ -78,7 +81,7 @@ def verify():
     assert 'traceparent' in go and 'propagateTraceHeaders' in go
     assert 'otel-tracing' in (D/'telemetry.yaml').read_text()
     assert (D/'podmonitor-istio-proxies.yaml').exists()
-    print('PASS: six Rollouts (4 Canary + 2 CRUD BlueGreen), four persistent language databases, fixed DB binding and Istio routing')
+    print('PASS: six Rollouts, four independent MariaDB PVCs, explicit CRUD promotion, indefinite Blue/Green preview')
 
 def setcolor(color,instance):
     verify()

@@ -1,7 +1,7 @@
 -- Brazilian Portuguese literature, 20 representative classics.
 -- Only on a fresh MariaDB 10.11 data directory (SCL mysql-init hook).
 -- bookdb is created by MYSQL_DATABASE in the Rollout.
--- IDs 1-3 deliberately overlap the Go Backend INSERT IGNORE demo rows.
+-- IDs 1-3 are ordinary pre-seeded books; CRUD only performs SELECT queries.
 SET NAMES utf8mb4;
 CREATE TABLE IF NOT EXISTS books (
     id INT PRIMARY KEY,

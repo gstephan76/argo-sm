@@ -19,7 +19,6 @@ import time
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 EXPECTED_SM_REMOTE = "github.com/gstephan76/SM"
-EXPECTED_APP_REMOTE = "github.com/gstephan76/argo-sm"
 ROLES = ("crud", "backend", "front")
 APPS = ("a", "b")
 TRACKS = ("blue", "green")
@@ -86,17 +85,37 @@ def assert_git_clean():
     branch = git("branch", "--show-current")
     if branch != "main":
         raise Failure(f"argo-sm must be on branch main; found {branch!r}")
+    origins = {"https://github.com/gstephan76/argo-sm", "https://github.com/gstephan76/argo-sm.git",
+               "git@github.com:gstephan76/argo-sm", "git@github.com:gstephan76/argo-sm.git",
+               "ssh://git@github.com/gstephan76/argo-sm", "ssh://git@github.com/gstephan76/argo-sm.git"}
     origin = git("remote", "get-url", "origin")
-    if EXPECTED_APP_REMOTE not in origin and "github.com:gstephan76/argo-sm" not in origin:
-        raise Failure(f"Unexpected argo-sm origin: {origin}")
+    push_origin = git("remote", "get-url", "--push", "--all", "origin")
+    if origin not in origins or push_origin not in origins:
+        raise Failure("Unexpected fetch origin or unexpected/multiple push origins")
     tracked = git("status", "--porcelain", "--untracked-files=no")
     if tracked:
         raise Failure("Tracked changes are present; stash/commit your changes before setup/prepare:\n" + tracked)
     call(["git", "fetch", "origin", "main"], cwd=ROOT, timeout=120)
     local = git("rev-parse", "HEAD")
     remote = git("rev-parse", "origin/main")
+    pending_proc = silent(["git", "rev-parse", "--verify", "--quiet", "refs/full-multi/pending"], cwd=ROOT)
+    if pending_proc.returncode not in (0, 1):
+        raise Failure("Cannot inspect pending workflow reference")
+    pending = pending_proc.stdout.strip() if pending_proc.returncode == 0 else ""
     if local != remote:
-        raise Failure(f"main and origin/main differ: {local[:12]} / {remote[:12]}; update deliberately")
+        call([sys.executable, "scripts/full-multi-spec.py", "verify-pending", "--instance", "all",
+              "--color", "blue", "--base", remote, "--head", local], cwd=ROOT, timeout=90)
+        if git("rev-parse", "HEAD") != local:
+            raise Failure("HEAD changed during pending commit verification")
+        call(["git", "push", "origin", f"{local}:refs/heads/main"], cwd=ROOT, timeout=180)
+        call(["git", "fetch", "origin", "main"], cwd=ROOT, timeout=120)
+        if git("rev-parse", "HEAD") != local or git("rev-parse", "origin/main") != local:
+            raise Failure("Git changed during push recovery")
+        call(["git", "update-ref", "-d", "refs/full-multi/pending", local], cwd=ROOT)
+    elif pending:
+        if pending != local:
+            raise Failure("Unexpected pending workflow reference; inspect Git state")
+        call(["git", "update-ref", "-d", "refs/full-multi/pending", local], cwd=ROOT)
     return local
 
 
@@ -223,31 +242,10 @@ def verify_db_volumes():
 def wait_gitops(revision, timeout=900):
     call(["oc", "-n", "openshift-gitops", "annotate", "application", "full-multi",
           "argocd.argoproj.io/refresh=hard", "--overwrite"], timeout=45)
-    deadline = time.monotonic() + timeout
-    last = None
-    while time.monotonic() < deadline:
-        app = ocjson("-n", "openshift-gitops", "get", "application", "full-multi")
-        spec = app.get("spec", {}).get("syncPolicy", {}).get("automated", {})
-        status = app.get("status", {})
-        sync = status.get("sync", {})
-        rev = sync.get("revision", "")
-        phase = status.get("operationState", {}).get("phase", "")
-        if phase in ("Error", "Failed") and status.get("operationState", {}).get("syncResult", {}).get("revision") == revision:
-            raise Failure(f"Argo CD failed requested revision: {status.get('operationState', {}).get('message')}")
-        if rev == revision:
-            if sync.get("status") == "Synced":
-                log(f"PASS GitOps revision {revision[:12]} Synced")
-                return
-            if spec.get("prune") is False and sync.get("status") == "OutOfSync":
-                # Only acceptable during a protected legacy-object migration.
-                log(f"INFO GitOps revision {revision[:12]} observed OutOfSync with prune=false; testing live specs and endpoints")
-                return
-        message = (rev[:12], sync.get("status"), phase)
-        if message != last:
-            log(f"WAIT GitOps revision={message[0]} sync={message[1]} operation={message[2]}")
-            last = message
-        time.sleep(5)
-    raise Failure(f"Argo CD did not observe required revision {revision[:12]}")
+    call([sys.executable, 'scripts/full-multi-bootstrap.py', 'wait-sync',
+          '--application', 'full-multi', '--argocd-namespace', 'openshift-gitops',
+          '--revision', revision, '--timeout', str(timeout), '--poll', '5',
+          '--allow-legacy-prune-disabled'], cwd=ROOT, timeout=timeout + 60)
 
 
 def rollout(name):
@@ -277,6 +275,7 @@ def blue_template(obj, name):
 def wait_blue_rollouts(timeout=900):
     deadline = time.monotonic() + timeout
     done = set()
+    retried = set()
     observed = {}
     while time.monotonic() < deadline:
         for app in APPS:
@@ -293,10 +292,15 @@ def wait_blue_rollouts(timeout=900):
                 if observed.get(name) != current:
                     log(f"WAIT {name}: phase={phase}, step={current[1]}, observedGen={current[2]}/{meta.get('generation')}")
                     observed[name] = current
-                if phase == "Degraded":
-                    raise Failure(f"{name}: Degraded; examine events/analysis and correct root cause before retrying")
                 if int(status.get("observedGeneration") or 0) < int(meta.get("generation") or 1):
                     continue
+                if status.get("abort"):
+                    if name not in retried:
+                        call(["oc", "argo", "rollouts", "retry", "rollout", name, "-n", "full-multi"], timeout=60)
+                        retried.add(name)
+                    continue
+                if phase == "Degraded":
+                    raise Failure(f"{name}: Degraded; examine events/analysis and correct root cause before retrying")
                 if phase == "Paused":
                     if role != "crud" and int(status.get("currentStepIndex") or 0) != 6:
                         raise Failure(f"{name}: unexpected Canary pause step {status.get('currentStepIndex')}; refusing auto promotion")
@@ -341,7 +345,10 @@ def commit_blue():
         raise Failure(f"Unexpected staged files after Blue rebaseline: {unknown}")
     if stage:
         call(["git", "commit", "-m", "Prepare full-multi: deterministic Blue baseline"], cwd=ROOT)
-        call(["git", "push", "origin", "main"], cwd=ROOT, timeout=180)
+        head = git("rev-parse", "HEAD")
+        call(["git", "update-ref", "refs/full-multi/pending", head, ""], cwd=ROOT)
+        call(["git", "push", "origin", f"{head}:refs/heads/main"], cwd=ROOT, timeout=180)
+        call(["git", "update-ref", "-d", "refs/full-multi/pending", head], cwd=ROOT)
     else:
         log("PASS Git desired templates already Blue; no commit necessary")
     return git("rev-parse", "HEAD")
@@ -386,6 +393,7 @@ def baseline_e2e():
 
 
 def ensure_gitops_app():
+    call([sys.executable, 'scripts/full-multi-bootstrap.py', 'preflight-deploy'], cwd=ROOT, timeout=80)
     current = maybe_oc_json("-n", "openshift-gitops", "get", "application", "full-multi")
     if current:
         source = current.get("spec", {}).get("source", {})
@@ -402,6 +410,7 @@ def setup(args):
     assert_git_clean()
     preflight_local()
     verify_images()
+    call([sys.executable, 'scripts/full-multi-bootstrap.py', 'preflight-deploy'], cwd=ROOT, timeout=80)
     log("SM v3.5: preinstalled OLM Operators required; missing CSVs/CRDs will fail in check-prereqs.sh")
     # Bootstrap init-env does not overwrite tenant UUID or credentials.
     call(["bash", str(sm / "scripts/init-env.sh")], cwd=sm, timeout=60)

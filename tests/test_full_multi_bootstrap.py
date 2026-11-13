@@ -39,7 +39,38 @@ class BootstrapTests(unittest.TestCase):
         self.assertFalse(mod.sync_snapshot(app, 'new')['terminal'])
         self.assertTrue(mod.sync_snapshot(app, 'old')['terminal'])
 
-    def test_wait_ready_requires_all_eight_rollouts_and_gateway(self):
+    def test_protected_migration_accepts_only_legacy_resources_to_prune(self):
+        legacy = {'group': 'argoproj.io', 'kind': 'Rollout', 'name': 'mariadb-a',
+                  'namespace': 'full-multi', 'status': 'OutOfSync', 'requiresPruning': True}
+        app = {'spec': {'syncPolicy': {'automated': {'prune': False}}},
+               'status': {'sync': {'revision': 'new', 'status': 'OutOfSync'},
+                          'resources': [legacy]}}
+        self.assertFalse(mod.sync_snapshot(app, 'new')['done'])
+        self.assertTrue(mod.sync_snapshot(app, 'new', True)['done'])
+        app['status']['resources'].append({'kind': 'Rollout', 'name': 'crud-a', 'status': 'OutOfSync'})
+        self.assertFalse(mod.sync_snapshot(app, 'new', True)['done'])
+        app['status']['resources'].pop()
+        app['status']['operationState'] = {'phase': 'Failed', 'syncResult': {'revision': 'new'}}
+        self.assertFalse(mod.sync_snapshot(app, 'new', True)['done'])
+
+    def test_deploy_refuses_to_reenable_disabled_pruning(self):
+        app = {'spec': {'syncPolicy': {'automated': {'prune': False}}}}
+        with patch.object(mod, 'oc_json', return_value=app):
+            with self.assertRaisesRegex(mod.BootstrapError, 'pruning disabled'):
+                mod.preflight_deploy('full-multi', 'openshift-gitops', 'full-multi')
+
+    def test_deploy_refuses_legacy_database_rollout(self):
+        def fake_get(*args, **kwargs):
+            if 'application' in args:
+                return None
+            if 'namespace' in args:
+                return {'metadata': {'name': 'full-multi'}}
+            return {'items': [{'metadata': {'name': 'mariadb-a'}}]}
+        with patch.object(mod, 'oc_json', side_effect=fake_get):
+            with self.assertRaisesRegex(mod.BootstrapError, 'Legacy MariaDB'):
+                mod.preflight_deploy('full-multi', 'openshift-gitops', 'full-multi')
+
+    def test_readiness_requires_all_six_rollouts_and_gateway(self):
         items = []
         for name in mod.EXPECTED_ROLLOUTS:
             items.append({'metadata': {'name': name, 'generation': 1},
@@ -49,8 +80,8 @@ class BootstrapTests(unittest.TestCase):
         gw = {'metadata': {'generation': 1},
               'status': {'observedGeneration': 1, 'availableReplicas': 1}}
         self.assertEqual(mod.readiness_report(items, gw), ([], []))
-        incomplete = [x for x in items if x['metadata']['name'] != 'mariadb-a']
-        self.assertTrue(any('mariadb-a: absent' in p for p in mod.readiness_report(incomplete, gw)[0]))
+        incomplete = [x for x in items if x['metadata']['name'] != 'crud-a']
+        self.assertTrue(any('crud-a: absent' in p for p in mod.readiness_report(incomplete, gw)[0]))
 
     def test_preflight_missing_controller_fails_before_gitops_apply(self):
         def fake_get(*args, **kwargs):
@@ -77,19 +108,21 @@ class BootstrapTests(unittest.TestCase):
                 return {'metadata': {'generation': 1}, 'status': {'availableReplicas': 0}}
             if 'replicasets' in args:
                 return {'items': [rs]}
+            if 'statefulsets.apps' in args or 'persistentvolumeclaims' in args:
+                return {'items': []}
             raise AssertionError(args)
         with patch.object(mod, 'oc_json', side_effect=fake_get):
             with self.assertRaisesRegex(mod.BootstrapError, 'port 15090 reserved'):
                 mod.wait_ready('full-multi', 5, 1)
 
     def test_degraded_rollout_is_terminal(self):
-        item = {'metadata': {'name': 'mariadb-a', 'generation': 1},
+        item = {'metadata': {'name': 'crud-a', 'generation': 1},
                 'spec': {'replicas': 1},
                 'status': {'phase': 'Degraded', 'availableReplicas': 0, 'observedGeneration': 1}}
         issues, degraded = mod.readiness_report([item],
             {'metadata': {'generation': 1}, 'status': {'availableReplicas': 1, 'observedGeneration': 1}})
         self.assertTrue(issues)
-        self.assertIn('mariadb-a: phase Degraded', degraded)
+        self.assertIn('crud-a: phase Degraded', degraded)
 
 
 if __name__ == '__main__':

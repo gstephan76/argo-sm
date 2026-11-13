@@ -70,6 +70,15 @@ This is a **deliberate reset**, not a status check:
 
 The reset handles previously paused Green, promoted Green, paused Canary, Healthy Blue, and previously aborted updates **when the cluster is otherwise functional**. It fails closed on unrecognized Degraded state, missing controller, bad storage, Git divergence or unhealthy infrastructure: no software can safely promise to recover arbitrary failures by silently deleting resources.
 
+The reset is a sequence of Git, database and cluster operations, not a single
+transaction. After an interruption, inspect the reported error and rerun only
+after resolving it. A known aborted Rollout is retried only after its live
+template is verified Blue and its generation observed. If a workflow commit was
+created but its push failed, rerunning requires the workflow's local pending
+ref and verifies the commit's parent, message, files and exact template changes
+before retrying the push. An interruption before the ref is recorded, or other
+Git divergence, requires manual inspection.
+
 Do not run global prepare during a demonstration if you intend to keep the Green preview paused; `prepare` intentionally returns to Blue only.
 
 ## Start the demo and verify it stays paused

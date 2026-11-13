@@ -1,5 +1,6 @@
 """Offline contract tests: no cluster or GitHub access required."""
 import importlib.util
+import subprocess
 from pathlib import Path
 import unittest
 from unittest.mock import patch
@@ -42,6 +43,33 @@ class GlobalWorkflowTests(unittest.TestCase):
             self.assertEqual(M.main(["prepare"]), 0)
             c.assert_not_called()
             b.assert_not_called()
+
+    def test_pending_global_commit_is_verified_before_exact_push(self):
+        origin='https://github.com/gstephan76/argo-sm.git'
+        local='a'*40
+        remote='b'*40
+        responses=['main', origin, origin, '', local, remote, local, local, local]
+        pending=subprocess.CompletedProcess([], 0, local+'\n', '')
+        with patch.object(M, 'git', side_effect=responses), patch.object(M, 'silent', return_value=pending), patch.object(M, 'call') as call:
+            self.assertEqual(M.assert_git_clean(), local)
+        commands=[c.args[0] for c in call.call_args_list]
+        verify=next(i for i,c in enumerate(commands) if 'verify-pending' in c)
+        push=next(i for i,c in enumerate(commands) if c[:2]==['git','push'])
+        self.assertLess(verify,push)
+        self.assertEqual(commands[push], ['git','push','origin',f'{local}:refs/heads/main'])
+
+    def test_invalid_pending_global_commit_is_never_pushed(self):
+        origin='https://github.com/gstephan76/argo-sm.git'
+        responses=['main', origin, origin, '', 'a'*40, 'b'*40]
+        def execute(args, **kwargs):
+            if 'verify-pending' in args:
+                raise M.Failure('invalid pending commit')
+            return ''
+        pending=subprocess.CompletedProcess([], 0, 'a'*40+'\n', '')
+        with patch.object(M, 'git', side_effect=responses), patch.object(M, 'silent', return_value=pending), patch.object(M, 'call', side_effect=execute) as call:
+            with self.assertRaisesRegex(M.Failure,'invalid pending commit'):
+                M.assert_git_clean()
+        self.assertFalse(any(c.args[0][:2]==['git','push'] for c in call.call_args_list))
 
     def test_setup_requires_apply_and_push(self):
         with patch.object(M, "call") as c, patch.object(M, "setup") as s:
@@ -97,6 +125,23 @@ class GlobalWorkflowTests(unittest.TestCase):
              patch.object(M, "call") as commands:
             M.wait_blue_rollouts(timeout=5)
             commands.assert_not_called()
+
+    def test_rebaseline_retries_only_verified_blue_aborted_revision(self):
+        seen = set()
+        def fake_rollout(name):
+            aborted = name == 'crud-a' and name not in seen
+            seen.add(name)
+            return {'metadata': {'generation': 5}, 'spec': {'replicas': 1},
+                    'status': {'phase': 'Degraded' if aborted else 'Healthy',
+                               'abort': aborted, 'observedGeneration': '5',
+                               'availableReplicas': '1', 'stableRS': 'stable',
+                               'currentPodHash': 'stable'}}
+        with patch.object(M, 'rollout', side_effect=fake_rollout), \
+             patch.object(M, 'blue_template', return_value=True), \
+             patch.object(M, 'call') as commands, patch.object(M.time, 'sleep'):
+            M.wait_blue_rollouts(timeout=5)
+            commands.assert_called_once_with(
+                ['oc', 'argo', 'rollouts', 'retry', 'rollout', 'crud-a', '-n', 'full-multi'], timeout=60)
 
     def test_sm_branch_rejection(self):
         with patch.object(M, "git", side_effect=["main", "https://github.com/gstephan76/SM.git"]):

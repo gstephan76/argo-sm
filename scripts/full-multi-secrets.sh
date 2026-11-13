@@ -5,7 +5,10 @@ set -Eeuo pipefail
 oc apply -f "$(dirname "$0")/../full-multi/namespace.yaml"
 present=0
 for app in a b; do
-  if oc -n full-multi get secret "db-credentials-$app" >/dev/null 2>&1; then
+  # --ignore-not-found distinguishes an absent Secret from an API/RBAC error.
+  # Only request the resource name; never print or process existing contents.
+  name="$(oc -n full-multi get secret "db-credentials-$app" --ignore-not-found -o name)"
+  if [[ -n "$name" ]]; then
     present=$((present + 1))
   fi
 done
@@ -20,7 +23,9 @@ fi
 : "${FULL_MULTI_DB_PASSWORD:?FULL_MULTI_DB_PASSWORD is required for first provision}"
 : "${FULL_MULTI_DB_ROOT_PASSWORD:?FULL_MULTI_DB_ROOT_PASSWORD is required for first provision}"
 # No credentials in shell arguments, Git, or on-disk manifests.
-python3 - <<'PY' | oc apply -f -
+# Create, never apply: a concurrent creator must cause a safe failure rather
+# than allowing us to overwrite credentials after the existence check.
+python3 - <<'PY' | oc create -f -
 import base64,json,os
 for app in 'ab':
     data={'password':os.environ['FULL_MULTI_DB_PASSWORD'],

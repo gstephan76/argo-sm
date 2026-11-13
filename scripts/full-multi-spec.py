@@ -3,6 +3,7 @@
 import argparse
 from pathlib import Path
 import re
+import subprocess
 from datetime import datetime, timezone
 
 ROOT=Path(__file__).resolve().parent.parent
@@ -83,43 +84,96 @@ def verify():
     assert (D/'podmonitor-istio-proxies.yaml').exists()
     print('PASS: six Rollouts, four independent MariaDB PVCs, explicit CRUD promotion, indefinite Blue/Green preview')
 
+def transform(s, tier, instance, color, marker):
+    col=color.upper()
+    s,n=re.subn(r'(        demo-rollout-revision: )\S+',lambda m:m[1]+marker,s)
+    assert n==1, tier
+    if tier in ('front','backend'):
+        s,n=re.subn(r'(              value: "Application [AB] - )(BLUE|YELLOW)(")',lambda m:m[1]+col+m[3],s)
+        assert n==1, tier
+        s,n=re.subn(r'(                value: )(BLUE|YELLOW)$',lambda m:m[1]+col,s,flags=re.M)
+        assert n==3, tier
+    else:
+        tr='blue' if color=='blue' else 'green'
+        s,n=re.subn(r'(        demo\.crud-track: )(blue|green)',lambda m:m[1]+tr,s)
+        assert n==1, tier
+        s,n=re.subn(r'(              value: mariadb-'+instance+r'-)(blue|green)(\.full-multi\.svc\.cluster\.local)',
+                    lambda m:m[1]+tr+m[3],s)
+        assert n==1, tier
+        s,n=re.subn(r'(?m)(            - name: DB_TRACK\n              value: )(blue|green)$',lambda m:m[1]+tr,s)
+        assert n==1, tier
+    return s
+
 def setcolor(color,instance):
     verify()
     assert color in ('blue','yellow') and instance in ('a','b')
-    col=color.upper()
+    if color == 'yellow':
+        texts = [(D/f'rollout-{tier}-{instance}.yaml').read_text() for tier in TIERS]
+        markers = [re.search(r'(?m)^        demo-rollout-revision: (\S+)$', s).group(1) for s in texts]
+        tracks = re.findall(r'(?m)^        demo\.crud-track: (blue|green)$', texts[2])
+        if len(set(markers)) == 1 and re.fullmatch(r'candidate-yellow-\d{8}T\d{6}Z', markers[0]):
+            assert tracks == ['green'], 'Existing candidate has an inconsistent CRUD track'
+            for s in texts[:2]:
+                assert f'Application {instance.upper()} - YELLOW' in s
+                assert re.findall(r'(?m)^                value: (BLUE|YELLOW)$', s) == ['YELLOW'] * 3
+            print(f'Application {instance.upper()} candidate already exists ({markers[0]}); unchanged')
+            return
+        assert tracks == ['blue'] and markers == ['baseline-blue'] * 3, \
+            'Refusing to replace an inconsistent or unrecognized candidate; inspect the templates'
     marker='baseline-blue' if color=='blue' else 'candidate-yellow-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
     changes={}
     for tier in TIERS:
         p=D/f'rollout-{tier}-{instance}.yaml'
-        s=p.read_text()
-        s,n=re.subn(r'(        demo-rollout-revision: )\S+',lambda m:m[1]+marker,s)
-        assert n==1,p
-        if tier in ('front','backend'):
-            s,n=re.subn(r'(              value: "Application [AB] - )(BLUE|YELLOW)(")',lambda m:m[1]+col+m[3],s)
-            assert n==1,p
-            s,n=re.subn(r'(                value: )(BLUE|YELLOW)$',lambda m:m[1]+col,s,flags=re.M)
-            assert n==3,p
-        else:
-            tr='blue' if color=='blue' else 'green'
-            s,n=re.subn(r'(        demo\.crud-track: )(blue|green)',lambda m:m[1]+tr,s)
-            assert n==1,p
-            s,n=re.subn(r'(              value: mariadb-'+instance+r'-)(blue|green)(\.full-multi\.svc\.cluster\.local)',
-                        lambda m:m[1]+tr+m[3],s)
-            assert n==1,p
-            s,n=re.subn(r'(?m)(            - name: DB_TRACK\n              value: )(blue|green)$',lambda m:m[1]+tr,s)
-            assert n==1,p
-        changes[p]=s
+        changes[p]=transform(p.read_text(), tier, instance, color, marker)
     for p,s in changes.items():p.write_text(s)
     verify()
-    print(f'Set application {instance.upper()} Front/Backend to {col}, CRUD to {"blue/English" if color=="blue" else "green/Portuguese"} ({marker})')
+    print(f'Set application {instance.upper()} Front/Backend to {color.upper()}, CRUD to {"blue/English" if color=="blue" else "green/Portuguese"} ({marker})')
+
+def verify_pending(instance, color, base, head):
+    """Verify a single pending workflow commit against its exact transformation."""
+    def git(*args):
+        return subprocess.run(['git', *args], cwd=ROOT, text=True, check=True,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout
+    assert re.fullmatch(r'[0-9a-f]{40,64}', base) and re.fullmatch(r'[0-9a-f]{40,64}', head)
+    assert git('rev-parse', '--verify', 'refs/full-multi/pending').strip()==head, 'Pending workflow reference does not identify HEAD'
+    assert git('rev-list', '--parents', '-n', '1', head).strip().split() == [head,base], 'Pending commit must have origin/main as its sole parent'
+    apps='ab' if instance=='all' else instance
+    subject=('Prepare full-multi: deterministic Blue baseline' if instance=='all' else
+             f'Set full-multi instance {instance} {color}')
+    assert git('show', '-s', '--format=%s', head).strip()==subject, 'Unexpected pending commit subject'
+    allowed={f'full-multi/rollout-{tier}-{app}.yaml' for app in apps for tier in TIERS}
+    changed=git('diff', '--name-status', '--no-renames', base, head).splitlines()
+    assert changed and all(line.startswith('M\t') and line[2:] in allowed for line in changed), 'Pending commit changes unexpected paths'
+    assert not git('diff', '--summary', base, head).strip(), 'Pending commit changes file modes or types'
+    verify()
+    for app in apps:
+        paths={tier:f'full-multi/rollout-{tier}-{app}.yaml' for tier in TIERS}
+        after={tier:git('show', f'{head}:{path}') for tier,path in paths.items()}
+        markers=[re.search(r'(?m)^        demo-rollout-revision: (\S+)$', after[t]).group(1) for t in TIERS]
+        assert len(set(markers))==1, 'Pending rollout markers differ'
+        marker=markers[0]
+        assert (marker=='baseline-blue' if color=='blue' else
+                re.fullmatch(r'candidate-yellow-\d{8}T\d{6}Z', marker)), 'Unexpected pending revision marker'
+        for tier,path in paths.items():
+            before=git('show', f'{base}:{path}')
+            if color=='yellow':
+                assert '        demo-rollout-revision: baseline-blue\n' in before, 'Yellow candidate must start from Blue'
+            assert transform(before,tier,app,color,marker)==after[tier], f'Unexpected change in {path}'
+    print(f'PASS pending workflow commit {head[:12]} exactly matches {instance}/{color} transformation')
 
 if __name__=='__main__':
     p=argparse.ArgumentParser()
-    p.add_argument('command',choices=['verify','set'])
-    p.add_argument('--instance',choices=('a','b'))
+    p.add_argument('command',choices=['verify','set','verify-pending'])
+    p.add_argument('--instance',choices=('a','b','all'))
     p.add_argument('--color',choices=('blue','yellow'))
+    p.add_argument('--base')
+    p.add_argument('--head')
     args=p.parse_args()
     if args.command=='set':
-        if not args.instance or not args.color:p.error('set requires --instance and --color')
+        if args.instance not in ('a','b') or not args.color:p.error('set requires --instance a|b and --color')
         setcolor(args.color,args.instance)
+    elif args.command=='verify-pending':
+        if not args.instance or not args.color or not args.base or not args.head or (args.instance=='all' and args.color!='blue'):
+            p.error('verify-pending requires --instance, --color, --base and --head')
+        verify_pending(args.instance,args.color,args.base,args.head)
     else:verify()

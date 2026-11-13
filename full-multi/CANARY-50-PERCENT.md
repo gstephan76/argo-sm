@@ -6,6 +6,10 @@ each step, then pause for explicit promotion. Each application also has a
 separate CRUD BlueGreen Rollout, paused with Blue active and Green preview.
 MariaDB uses four persistent **StatefulSets** and is never an Argo Rollout.
 
+The AnalysisRuns are functional smoke checks of the candidate endpoints. Their
+repeated requests do not measure production error rates or establish statistical
+confidence; use the separate data-path gates to check the seeded catalogs.
+
 The front/backend canaries and the CRUD BlueGreen preview are both created by:
 
 ```bash

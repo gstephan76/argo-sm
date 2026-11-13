@@ -37,8 +37,16 @@ def ready(pod):
 
 def active_endpoint_pods(name):
     slices=oc('endpointslices.discovery.k8s.io','-l',f'kubernetes.io/service-name={name}')['items']
-    return {(e.get('targetRef') or {}).get('name') for s in slices for e in s.get('endpoints',[])
-            if e.get('conditions',{}).get('ready',True) and (e.get('targetRef') or {}).get('kind')=='Pod'}
+    pods=set()
+    for s in slices:
+        for endpoint in s.get('endpoints',[]):
+            if not endpoint.get('conditions',{}).get('ready',True):
+                continue
+            ref=endpoint.get('targetRef') or {}
+            need(ref.get('kind')=='Pod' and bool(ref.get('name')),
+                 name+': Ready endpoint does not identify a Pod')
+            pods.add(ref['name'])
+    return pods
 
 def verify(app):
     name=f'crud-{app}'
@@ -79,10 +87,9 @@ def verify(app):
     need(len(set(pvnames))==2,name+': Blue and Green share a PV')
     for svc,track in [('blue','blue'),('green','green'),('active','blue'),('preview','green')]:
         found=active_endpoint_pods(name+'-'+svc)
-        need(bool(found & selected[track]),
-             f'{name}-{svc}: no Ready endpoints targeting the expected {track} revision')
-        need(not (found & selected['green' if track=='blue' else 'blue']),
-             f'{name}-{svc}: endpoints cross the Blue/Green boundary')
+        need(bool(found), f'{name}-{svc}: no Ready endpoints')
+        need(found <= selected[track],
+             f'{name}-{svc}: unexpected Ready endpoints: {sorted(found - selected[track])}')
     print(f'PASS {name}: Paused; Blue active + Green preview Ready, isolated DBs/PVCs, 4 routed Services')
     return pvnames
 

@@ -103,7 +103,19 @@ def preflight(ns, argocd_ns):
     print('OK  GitOps namespace accessible', flush=True)
 
 
-def sync_snapshot(app, target):
+def preflight_deploy(ns, argocd_ns, app_name):
+    app = oc_json('-n', argocd_ns, 'get', 'application', app_name, allow_missing=True)
+    if app is not None and (app.get('spec') or {}).get('syncPolicy', {}).get('automated', {}).get('prune') is False:
+        raise BootstrapError('Existing Application has pruning disabled; refuse to re-enable it. '
+                             'Complete and authorize the protected migration first.')
+    if oc_json('get', 'namespace', ns, allow_missing=True) is not None:
+        items = oc_json('-n', ns, 'get', 'rollouts.argoproj.io').get('items') or []
+        legacy = sorted({x.get('metadata', {}).get('name') for x in items} & {'mariadb-a', 'mariadb-b'})
+        if legacy:
+            raise BootstrapError(f'Legacy MariaDB Rollouts {legacy} exist; refuse pruning-enabled deployment')
+
+
+def sync_snapshot(app, target, allow_legacy_prune_disabled=False):
     status = app.get('status') or {}
     sync = status.get('sync') or {}
     operation = status.get('operationState') or {}
@@ -112,6 +124,16 @@ def sync_snapshot(app, target):
     significant = [c for c in conditions if c.get('type') in
                    ('ComparisonError', 'InvalidSpecError', 'SyncError', 'UnknownError')]
     terminal = (operation.get('phase') in ('Error', 'Failed') and op_sync == target)
+    resources = status.get('resources') or []
+    out_of_sync = [r for r in resources if r.get('status') == 'OutOfSync']
+    protected_legacy_only = (
+        allow_legacy_prune_disabled and
+        (app.get('spec') or {}).get('syncPolicy', {}).get('automated', {}).get('prune') is False and
+        bool(out_of_sync) and all(
+            r.get('group') == 'argoproj.io' and r.get('kind') == 'Rollout' and
+            r.get('name') in ('mariadb-a', 'mariadb-b') and
+            r.get('namespace') == 'full-multi' and r.get('requiresPruning') is True
+            for r in out_of_sync))
     return {
         'revision': sync.get('revision') or '',
         'sync': sync.get('status') or 'Unknown',
@@ -119,25 +141,28 @@ def sync_snapshot(app, target):
         'operation': operation.get('phase') or 'Unknown',
         'message': operation.get('message') or '',
         'conditions': significant,
-        'done': sync.get('revision') == target and sync.get('status') == 'Synced',
+        'done': (sync.get('revision') == target and not terminal and not significant and
+                 operation.get('phase') not in ('Running', 'Terminating') and
+                 (sync.get('status') == 'Synced' or
+                  (sync.get('status') == 'OutOfSync' and protected_legacy_only))),
         'terminal': terminal,
     }
 
 
-def wait_sync(app_name, argocd_ns, revision, timeout, poll):
+def wait_sync(app_name, argocd_ns, revision, timeout, poll, allow_legacy_prune_disabled=False):
     deadline = time.monotonic() + timeout
     last_message = None
     errors_seen = 0
     while True:
         app = oc_json('-n', argocd_ns, 'get', 'application', app_name)
-        s = sync_snapshot(app, revision)
+        s = sync_snapshot(app, revision, allow_legacy_prune_disabled)
         message = ('revision=%s sync=%s health=%s operation=%s' %
                    (s['revision'][:12] or 'none', s['sync'], s['health'], s['operation']))
         if message != last_message:
             print('GITOPS ' + message, flush=True)
             last_message = message
         if s['done']:
-            print(f'PASS Argo CD synced expected revision {revision[:12]}; '
+            print(f'PASS Argo CD accepted expected revision {revision[:12]} ({s["sync"]}); '
                   'checking workload readiness separately', flush=True)
             return
         if s['terminal']:
@@ -247,13 +272,15 @@ def wait_ready(ns, timeout, poll):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('command', choices=['preflight', 'wait-sync', 'wait-ready'])
+    p.add_argument('command', choices=['preflight', 'preflight-deploy', 'wait-sync', 'wait-ready'])
     p.add_argument('--namespace', default='full-multi')
     p.add_argument('--argocd-namespace', default='openshift-gitops')
     p.add_argument('--application', default='full-multi')
     p.add_argument('--revision')
     p.add_argument('--timeout', type=int, default=900)
     p.add_argument('--poll', type=int, default=5)
+    p.add_argument('--allow-legacy-prune-disabled', action='store_true',
+                   help='Allow only the two obsolete MariaDB Rollouts to require pruning')
     x = p.parse_args()
     if x.timeout < 1 or x.poll < 1:
         p.error('--timeout and --poll must be positive')
@@ -262,8 +289,11 @@ def main():
     try:
         if x.command == 'preflight':
             preflight(x.namespace, x.argocd_namespace)
+        elif x.command == 'preflight-deploy':
+            preflight_deploy(x.namespace, x.argocd_namespace, x.application)
         elif x.command == 'wait-sync':
-            wait_sync(x.application, x.argocd_namespace, x.revision, x.timeout, x.poll)
+            wait_sync(x.application, x.argocd_namespace, x.revision, x.timeout, x.poll,
+                      x.allow_legacy_prune_disabled)
         else:
             wait_ready(x.namespace, x.timeout, x.poll)
         return 0

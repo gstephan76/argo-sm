@@ -78,6 +78,16 @@ may require promotion to finish. Do **not** execute `prepare` during a paused
 the Green candidate, waits for both Rollouts to pause
 and checks the selected application's Blue/Green HTTP and SQL paths.
 
+If a start is interrupted, repeat the same command. An existing candidate is
+reused only when the three Git templates agree and the live Rollouts match its
+revision; the normal pause and data-path gates must still pass. A promoted,
+inconsistent, or otherwise unexpected state is refused for inspection.
+If the previous run committed but failed to push, the matching command retries
+the push only for a single commit recorded in the workflow's local pending ref
+whose parent, message, files and exact template changes match that workflow.
+An interruption before the ref is recorded, or other Git divergence, requires
+manual inspection.
+
 **Remain paused indefinitely for the demonstration.** Re-run the read-only
 validation whenever desired; there is no timer-driven promotion.
 
@@ -118,6 +128,11 @@ cutover and required cleanup are explicitly completed. No old database data
 needs migrating. Application data is disposable seed data, but PVC ownership
 and separation are hard requirements. `scripts/full-multi-databases.sh` stages
 only the four new DB resources without changing old ones.
+
+Deploy and global setup refuse to enable pruning when the live Application has
+pruning disabled or legacy MariaDB Rollouts remain. During protected migration,
+the GitOps wait permits OutOfSync only when all reported differences are the
+recognized obsolete MariaDB Rollouts awaiting pruning.
 
 ### Code ownership and maintenance
 

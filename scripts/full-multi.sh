@@ -24,13 +24,34 @@ CANARY_PAUSE_STEP_INDEX=6
 cmd="${1:-help}"
 fail(){ echo "ERROR: $*" >&2; exit 1; }
 require(){ command -v "$1" >/dev/null || fail "Missing $1"; }
+valid_origin(){
+ case "$1" in
+   https://github.com/gstephan76/argo-sm|https://github.com/gstephan76/argo-sm.git|git@github.com:gstephan76/argo-sm|git@github.com:gstephan76/argo-sm.git|ssh://git@github.com/gstephan76/argo-sm|ssh://git@github.com/gstephan76/argo-sm.git) return 0;;
+   *) return 1;;
+ esac
+}
 check_git(){
  require git
  [[ "$(git branch --show-current)" == main ]] || fail 'Must be on main'
  git diff --quiet && git diff --cached --quiet || fail 'Commit tracked changes first'
+ valid_origin "$(git remote get-url origin)" || fail 'Unexpected fetch origin'
+ valid_origin "$(git remote get-url --push --all origin)" || fail 'Unexpected or multiple push origins'
  git fetch origin main
- [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] || fail 'HEAD must match origin/main'
- [[ "$(git remote get-url origin)" == *gstephan76/argo-sm* ]] || fail 'Unexpected origin'
+ local head base color pending
+ head="$(git rev-parse HEAD)"; base="$(git rev-parse origin/main)"
+ pending="$(git rev-parse --verify --quiet refs/full-multi/pending || :)"
+ if [[ "$head" != "$base" ]];then
+   case "$cmd" in prepare) color=blue;; start) color=yellow;; *) fail 'HEAD must match origin/main';; esac
+   python3 scripts/full-multi-spec.py verify-pending --instance "$INSTANCE" --color "$color" --base "$base" --head "$head"
+   [[ "$(git rev-parse HEAD)" == "$head" ]] || fail 'HEAD changed during pending commit verification'
+   git push origin "$head:refs/heads/main"
+   git fetch origin main
+   [[ "$(git rev-parse HEAD)" == "$head" && "$(git rev-parse origin/main)" == "$head" ]] || fail 'Git changed during push recovery'
+   git update-ref -d refs/full-multi/pending "$head"
+ elif [[ -n "$pending" ]];then
+   [[ "$pending" == "$head" ]] || fail 'Unexpected pending workflow reference; inspect Git state'
+   git update-ref -d refs/full-multi/pending "$head"
+ fi
 }
 ready(){
  local name="$1" desired="$2" start=$SECONDS phase step previous=''
@@ -53,6 +74,11 @@ ready(){
    fi
    if [[ "$phase" == Paused ]];then
      if [[ "$desired" == paused ]];then
+       marker="$(oc -n "$NS" get rollout "$name" -o jsonpath='{.spec.template.metadata.annotations.demo-rollout-revision}')"
+       generation="$(oc -n "$NS" get rollout "$name" -o jsonpath='{.metadata.generation}')"
+       observed="$(oc -n "$NS" get rollout "$name" -o jsonpath='{.status.observedGeneration}')"
+       [[ "$marker" == "$candidate_marker" ]] || fail "$name: candidate marker changed ($marker)"
+       if [[ "$observed" != "$generation" ]];then sleep "$POLL_SECONDS";continue;fi
        # HTTP canaries must reach 50%; CRUD pauses without a timer.
        if [[ "$name" == crud-* || "$step" == "$CANARY_PAUSE_STEP_INDEX" ]];then return 0;fi
      elif [[ "$desired" == healthy && "$cmd" == prepare ]];then
@@ -73,18 +99,10 @@ sync_git(){
  local wanted
  wanted="$(git rev-parse HEAD)"
  oc annotate application "$APP" -n "$ARGOCD_NS" argocd.argoproj.io/refresh=hard --overwrite >/dev/null
- # Old MariaDB Rollouts are deliberately retained with prune=false.
-   # In that protected state revision observation + real workload gates are
-   # required; an unconditional Synced check may never succeed.
-   pruning="$(oc -n "$ARGOCD_NS" get application "$APP" -o jsonpath='{.spec.syncPolicy.automated.prune}')"
-   if [[ "$pruning" == false ]];then
-     python3 scripts/full-multi-wait-gitops-revision.py --revision "$wanted" \
-       --timeout "$TIMEOUT_SECONDS" --poll "$POLL_SECONDS"
-   else
-     python3 scripts/full-multi-bootstrap.py wait-sync \
-       --application "$APP" --argocd-namespace "$ARGOCD_NS" \
-       --revision "$wanted" --timeout "$TIMEOUT_SECONDS" --poll "$POLL_SECONDS"
-   fi
+ python3 scripts/full-multi-bootstrap.py wait-sync \
+   --application "$APP" --argocd-namespace "$ARGOCD_NS" \
+   --revision "$wanted" --timeout "$TIMEOUT_SECONDS" --poll "$POLL_SECONDS" \
+   --allow-legacy-prune-disabled
 }
 rollouts_cli(){
  oc argo rollouts version >/dev/null 2>&1 || \
@@ -97,7 +115,11 @@ commit_stage(){
  git diff --cached --check
  if ! git diff --cached --quiet;then
    git commit -m "Set full-multi instance $INSTANCE $color"
-   git push origin main
+   local head
+   head="$(git rev-parse HEAD)"
+   git update-ref refs/full-multi/pending "$head" ''
+   git push origin "$head:refs/heads/main"
+   git update-ref -d refs/full-multi/pending "$head"
  fi
 }
 case "$cmd" in
@@ -108,6 +130,8 @@ case "$cmd" in
    check_git
    python3 scripts/full-multi-spec.py verify
    require oc
+   python3 scripts/full-multi-bootstrap.py preflight-deploy \
+     --namespace "$NS" --argocd-namespace "$ARGOCD_NS" --application "$APP"
    oc apply -f full-multi/namespace.yaml
    python3 scripts/full-multi-bootstrap.py preflight \
      --namespace "$NS" --argocd-namespace "$ARGOCD_NS"
@@ -136,16 +160,36 @@ case "$cmd" in
      python3 scripts/full-multi-history-prune.py --instance "$INSTANCE"
      commit_stage blue
    else
-     # Do not replace an existing preview or silently promote BlueGreen.
-     phase="$(oc -n "$NS" get rollout "crud-$INSTANCE" -o jsonpath='{.status.phase}')"
-     [[ "$phase" == Healthy ]] || fail "crud-$INSTANCE must be Healthy/Blue before start (phase=$phase)"
-     color="$(oc -n "$NS" get rollout "crud-$INSTANCE" -o jsonpath='{.spec.template.metadata.labels.demo\.crud-track}')"
-     [[ "$color" == blue ]] || fail "crud-$INSTANCE must have Blue baseline before start (track=$color)"
      # Read-only MariaDB grants are mandatory before opening Green preview.
      bash scripts/full-multi-db-readonly.sh --verify
-     commit_stage yellow
+     source_marker="$(sed -n 's/^        demo-rollout-revision: //p' "full-multi/rollout-crud-$INSTANCE.yaml")"
+     if [[ "$source_marker" == baseline-blue ]];then
+       # Only create a new candidate from a confirmed healthy Blue baseline.
+       phase="$(oc -n "$NS" get rollout "crud-$INSTANCE" -o jsonpath='{.status.phase}')"
+       color="$(oc -n "$NS" get rollout "crud-$INSTANCE" -o jsonpath='{.spec.template.metadata.labels.demo\.crud-track}')"
+       [[ "$phase" == Healthy && "$color" == blue ]] || fail "crud-$INSTANCE must be Healthy/Blue before start (phase=$phase track=$color)"
+       commit_stage yellow
+     elif [[ "$source_marker" =~ ^candidate-yellow-[0-9]{8}T[0-9]{6}Z$ ]];then
+       # This also verifies that all three source templates name the same
+       # candidate; it does not create a new timestamp on a retry.
+       python3 scripts/full-multi-spec.py set --instance "$INSTANCE" --color yellow
+       echo "Resuming existing candidate $source_marker"
+     else
+       fail "Unrecognized desired revision $source_marker"
+     fi
    fi
    sync_git
+   if [[ "$cmd" == start ]];then
+     candidate_marker="$(sed -n 's/^        demo-rollout-revision: //p' "full-multi/rollout-crud-$INSTANCE.yaml")"
+     for tier in crud backend front; do
+       marker="$(oc -n "$NS" get rollout "$tier-$INSTANCE" -o jsonpath='{.spec.template.metadata.annotations.demo-rollout-revision}')"
+       [[ "$marker" == "$candidate_marker" ]] || fail "$tier-$INSTANCE: live candidate $marker differs from Git $candidate_marker"
+     done
+     phase="$(oc -n "$NS" get rollout "crud-$INSTANCE" -o jsonpath='{.status.phase}')"
+     observed="$(oc -n "$NS" get rollout "crud-$INSTANCE" -o jsonpath='{.status.observedGeneration}')"
+     generation="$(oc -n "$NS" get rollout "crud-$INSTANCE" -o jsonpath='{.metadata.generation}')"
+     [[ "$phase" != Healthy || "$observed" != "$generation" ]] || fail "crud-$INSTANCE candidate is already Healthy; refusing to recreate or promote it"
+   fi
    for tier in crud backend front;do ready "$tier-$INSTANCE" "$([[ "$cmd" == prepare ]] && echo healthy || echo paused)";done
    if [[ "$cmd" == start ]];then
      python3 scripts/full-multi-crud-pause-gate.py --instance "$INSTANCE"

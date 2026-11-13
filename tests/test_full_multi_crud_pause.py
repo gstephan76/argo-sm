@@ -61,6 +61,27 @@ class PauseGateTest(unittest.TestCase):
         with patch.object(gate,'oc',side_effect=bad):
             with self.assertRaises(gate.Failed):gate.verify('a')
 
+    def test_unknown_ready_endpoint_fails(self):
+        def bad(*args):
+            result=fake_oc(*args)
+            if args[0]=='endpointslices.discovery.k8s.io' and args[-1].endswith('crud-a-blue'):
+                result['items'][0]['endpoints'].append({'conditions':{'ready':True},
+                    'targetRef':{'kind':'Pod','name':'unrecognized-pod'}})
+            return result
+        with patch.object(gate,'oc',side_effect=bad):
+            with self.assertRaisesRegex(gate.Failed, 'unexpected Ready endpoints'):
+                gate.verify('a')
+
+    def test_ready_endpoint_without_pod_reference_fails(self):
+        def bad(*args):
+            result=fake_oc(*args)
+            if args[0]=='endpointslices.discovery.k8s.io' and args[-1].endswith('crud-a-blue'):
+                result['items'][0]['endpoints'].append({'conditions':{'ready':True}})
+            return result
+        with patch.object(gate,'oc',side_effect=bad):
+            with self.assertRaisesRegex(gate.Failed, 'does not identify a Pod'):
+                gate.verify('a')
+
     def test_auto_promotion_fails(self):
         def bad(*args):
             result=fake_oc(*args)

@@ -61,20 +61,44 @@ bash scripts/full-multi-db-readonly.sh --apply
 bash scripts/full-multi-db-readonly.sh --verify
 ```
 
-For **each** application, run `prepare` then `start` once:
+### Simple per-application lifecycle
+
+The canonical commands are **one application at a time**. Use the executable
+script `scripts/full-multi` (or `bash scripts/full-multi.sh`):
 
 ```bash
-INSTANCE=a bash scripts/full-multi.sh prepare
-INSTANCE=b bash scripts/full-multi.sh prepare
-# Start both applications and run the complete pause + four-database gate automatically.
-bash scripts/full-multi.sh start
+INSTANCE=a scripts/full-multi prepare
+INSTANCE=a scripts/full-multi start
+# After the demonstration, only when deliberately promoting A:
+INSTANCE=a scripts/full-multi promote
+
+# Independently, use INSTANCE=b for application B:
+INSTANCE=b scripts/full-multi prepare
+INSTANCE=b scripts/full-multi start
+INSTANCE=b scripts/full-multi promote  # explicit action only
 ```
 
+`prepare` resets **only the selected application** to the BLUE baseline,
+including a paused GREEN candidate. It safely aborts that candidate; it does
+not promote GREEN or touch the other application's Rollouts/Git templates.
+The four MariaDB StatefulSets and their PVCs remain intact. Because `prepare`
+changes the selected GitOps manifests, it commits and pushes `main` using the
+same verified pending-commit recovery contract as global prepare. It validates
+SQL grants without rewriting the other application's database privileges.
+
+`start` creates/resumes the selected GREEN preview and requires it to remain
+paused. `promote` advances only the selected application's CRUD, Backend and
+Frontend Rollouts, and is never implicit. **Never run `prepare` while you want
+to preserve that application's paused GREEN demonstration.**
+
+To start both applications in sequence, `bash scripts/full-multi.sh start`
+(without `INSTANCE`) remains supported. The deliberate A+B reset still uses
+`bash scripts/full-multi-global-prepare.sh --apply --push`.
+
 `prepare` establishes a Blue active baseline. If a previous Green revision was
-promoted, resetting Blue in `prepare` is an explicit *pre-demo* rebaseline, and
-may require promotion to finish. Do **not** execute `prepare` during a paused
-**Green** preview. A temporary Blue-to-Blue image update may itself be paused;
-`prepare` can deliberately finish that pre-demo Blue rebaseline. `start` creates
+promoted, resetting Blue is an explicit *pre-demo* rebaseline; a paused BLUE
+rebaseline may be deliberately promoted to finish the reset. Do **not** execute
+`prepare` when you want to retain the GREEN preview. `start` creates
 the Green candidate, waits for both Rollouts to pause
 and checks the selected application's Blue/Green HTTP and SQL paths.
 

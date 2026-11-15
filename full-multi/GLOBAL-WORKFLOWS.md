@@ -79,7 +79,7 @@ ref and verifies the commit's parent, message, files and exact template changes
 before retrying the push. An interruption before the ref is recorded, or other
 Git divergence, requires manual inspection.
 
-Do not run global prepare during a demonstration if you intend to keep the Green preview paused; `prepare` intentionally returns to Blue only.
+Do not run global prepare during a demonstration if you intend to keep the Green preview paused; `prepare` intentionally returns both apps to Blue. To reset only A or B, use `INSTANCE=a|b scripts/full-multi prepare`, backed by the same verified reset implementation. That selected form changes only three rollout manifests, aborts only the selected candidate and retains the other app's current preview; the four SQL volumes remain untouched.
 
 ## Start the demo and verify it stays paused
 

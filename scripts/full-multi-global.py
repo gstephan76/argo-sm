@@ -81,7 +81,7 @@ def git(*args, cwd=ROOT):
     return call(["git", *args], cwd=cwd, capture=True, timeout=90)
 
 
-def assert_git_clean():
+def assert_git_clean(instance="all"):
     branch = git("branch", "--show-current")
     if branch != "main":
         raise Failure(f"argo-sm must be on branch main; found {branch!r}")
@@ -103,7 +103,7 @@ def assert_git_clean():
         raise Failure("Cannot inspect pending workflow reference")
     pending = pending_proc.stdout.strip() if pending_proc.returncode == 0 else ""
     if local != remote:
-        call([sys.executable, "scripts/full-multi-spec.py", "verify-pending", "--instance", "all",
+        call([sys.executable, "scripts/full-multi-spec.py", "verify-pending", "--instance", instance,
               "--color", "blue", "--base", remote, "--head", local], cwd=ROOT, timeout=90)
         if git("rev-parse", "HEAD") != local:
             raise Failure("HEAD changed during pending commit verification")
@@ -272,13 +272,13 @@ def blue_template(obj, name):
     return env_value(obj, "MESSAGE_PREFIX") == f"Application {app.upper()} - BLUE"
 
 
-def wait_blue_rollouts(timeout=900):
+def wait_blue_rollouts(timeout=900, apps=APPS):
     deadline = time.monotonic() + timeout
     done = set()
     retried = set()
     observed = {}
     while time.monotonic() < deadline:
-        for app in APPS:
+        for app in apps:
             for role in ROLES:
                 name = f"{role}-{app}"
                 if name in done:
@@ -310,14 +310,14 @@ def wait_blue_rollouts(timeout=900):
                       int(status.get("availableReplicas") or 0) >= int(r.get("spec", {}).get("replicas", 1))):
                     done.add(name)
                     log(f"PASS {name}: Blue Healthy")
-        if len(done) == 6:
+        if len(done) == len(apps) * len(ROLES):
             return
         time.sleep(5)
-    raise Failure(f"Timeout waiting for all six Healthy Blue Rollouts: {sorted(done)}")
+    raise Failure(f"Timeout waiting for selected Healthy Blue Rollouts: {sorted(done)}")
 
 
-def abort_pending_rollouts():
-    for app in APPS:
+def abort_pending_rollouts(apps=APPS):
+    for app in apps:
         for role in ROLES:
             name = f"{role}-{app}"
             r = rollout(name)
@@ -331,10 +331,10 @@ def abort_pending_rollouts():
                 call(["oc", "argo", "rollouts", "abort", name, "-n", "full-multi"], timeout=60)
 
 
-def commit_blue():
+def commit_blue(apps=APPS):
     # This is the only stage that can write application Git; do not stage other work.
-    target_paths = [f"full-multi/rollout-{role}-{app}.yaml" for app in APPS for role in ROLES]
-    for app in APPS:
+    target_paths = [f"full-multi/rollout-{role}-{app}.yaml" for app in apps for role in ROLES]
+    for app in apps:
         call([sys.executable, "scripts/full-multi-spec.py", "set", "--instance", app,
               "--color", "blue"], cwd=ROOT, timeout=45)
     call(["git", "add", "--", *target_paths], cwd=ROOT)
@@ -344,7 +344,9 @@ def commit_blue():
     if unknown:
         raise Failure(f"Unexpected staged files after Blue rebaseline: {unknown}")
     if stage:
-        call(["git", "commit", "-m", "Prepare full-multi: deterministic Blue baseline"], cwd=ROOT)
+        subject = ("Prepare full-multi: deterministic Blue baseline" if len(apps) == 2 else
+                   f"Set full-multi instance {apps[0]} blue")
+        call(["git", "commit", "-m", subject], cwd=ROOT)
         head = git("rev-parse", "HEAD")
         call(["git", "update-ref", "refs/full-multi/pending", head, ""], cwd=ROOT)
         call(["git", "push", "origin", f"{head}:refs/heads/main"], cwd=ROOT, timeout=180)
@@ -354,13 +356,13 @@ def commit_blue():
     return git("rev-parse", "HEAD")
 
 
-def baseline_e2e():
+def baseline_e2e(apps=APPS):
     """Check HTTP -> Front -> Backend -> CRUD -> each A/B English DB."""
     route = ocjson("-n", "full-multi", "get", "route", "full-multi")
     host = route.get("spec", {}).get("host", "")
     if not host:
         raise Failure("Route/full-multi lacks .spec.host")
-    for app in APPS:
+    for app in apps:
         headers = ["-H", f"x-app-target: {app}", "-H", "x-front-track: stable",
                    "-H", "x-backend-track: stable", "-H", "x-db-track: blue"]
         raw = call(["curl", "-q", "-kfsS", "--connect-timeout", "5", "--max-time", "20",
@@ -459,27 +461,33 @@ def setup(args):
 
 
 def rebaseline(args, *, verified=False):
+    # Same reset logic for one app or both. The other app's Rollouts and Git
+    # templates are never changed by a selected prepare.
+    apps = APPS if args.instance == "all" else (args.instance,)
     if not verified:
-        assert_git_clean()
+        assert_git_clean(instance=args.instance)
         preflight_local()
     call(["oc", "argo", "rollouts", "version"], timeout=35)
     call([sys.executable, "scripts/full-multi-bootstrap.py", "preflight"], cwd=ROOT, timeout=70)
     verify_db_volumes()
-    # Reconcile SELECT-only database permissions before resetting the Rollouts.
-    call(["bash", "scripts/full-multi-db-readonly.sh", "--apply"], cwd=ROOT, timeout=500)
+    # Reconcile privileges only for the global reset. A selected reset must
+    # not mutate the other application's database users or configuration.
+    if args.instance == "all":
+        call(["bash", "scripts/full-multi-db-readonly.sh", "--apply"], cwd=ROOT, timeout=500)
     call(["bash", "scripts/full-multi-db-readonly.sh", "--verify"], cwd=ROOT, timeout=500)
-    abort_pending_rollouts()
-    target = commit_blue()
+    abort_pending_rollouts(apps)
+    target = commit_blue(apps)
     wait_gitops(target)
-    wait_blue_rollouts(timeout=args.timeout)
-    baseline_e2e()
-    # Completed history is discarded only AFTER all six stable Blue revisions
-    # are Healthy. Never delete active/preview ReplicaSets or a database PVC.
-    for app in APPS:
+    wait_blue_rollouts(timeout=args.timeout, apps=apps)
+    baseline_e2e(apps)
+    # Delete history only for the selected app(s), once their Blue revisions
+    # are confirmed Healthy. Never delete current RS or database PVCs.
+    for app in apps:
         call([sys.executable, "scripts/full-multi-history-reset.py", "--instance", app,
               "--timeout-seconds", str(args.timeout)], cwd=ROOT, timeout=args.timeout + 120)
-    baseline_e2e()
-    log("PASS GLOBAL PREPARE: histories cleared; Blue baseline Healthy for A+B; four isolated SQL databases unchanged; ready for start")
+    baseline_e2e(apps)
+    log("PASS PREPARE: " + ",".join(apps) +
+        " Blue baseline Healthy; selected histories cleared; four SQL PVCs preserved")
 
 
 def paused_e2e():
@@ -504,17 +512,21 @@ def main(argv=None):
                         help="Checkout of gstephan76/SM branch v3.5 (default: ../ServiceMesh)")
     parser.add_argument("--bootstrap-mcg", action="store_true",
                         help="Explicitly allow the AWS gp3-csi ODF/MCG bootstrap from SM v3.5")
+    parser.add_argument("--instance", choices=("a", "b", "all"), default="all",
+                        help="Application to reset (prepare only; default: all)")
     parser.add_argument("--apply", action="store_true", help="Allow writes to cluster and/or Git")
     parser.add_argument("--push", action="store_true", help="Authorize GitOps main commits and push")
     parser.add_argument("--state", choices=("blue", "paused"), default="blue", help="E2E target state")
     parser.add_argument("--timeout", type=int, default=1200)
     args = parser.parse_args(argv)
+    if args.command != "prepare" and args.instance != "all":
+        parser.error("--instance is supported only for prepare")
     if args.timeout < 60:
         parser.error("--timeout must be >=60 seconds")
     if args.command in ("setup", "prepare") and not (args.apply and args.push):
         stages = ("SM v3.5 prereqs -> apply.sh (19 stages) -> four DBs -> GitOps -> Blue rebaseline -> E2E -> history reset"
                   if args.command == "setup" else
-                  "verify prerequisites -> abort pending candidates -> GitOps Blue rebaseline -> E2E -> delete completed histories")
+                  f"verify prerequisites -> abort {args.instance} pending candidates -> GitOps Blue rebaseline -> E2E -> clean selected histories")
         log(f"PLAN ONLY ({args.command}): {stages}")
         log("No changes made. Re-run with --apply --push to authorize changes.")
         return 0

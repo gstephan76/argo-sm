@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Canonical short command; lifecycle logic belongs solely to full-multi.sh.
+set -Eeuo pipefail
+exec bash "$(dirname "${BASH_SOURCE[0]}")/full-multi.sh" "$@"

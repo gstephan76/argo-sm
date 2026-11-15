@@ -41,7 +41,7 @@ check_git(){
  head="$(git rev-parse HEAD)"; base="$(git rev-parse origin/main)"
  pending="$(git rev-parse --verify --quiet refs/full-multi/pending || :)"
  if [[ "$head" != "$base" ]];then
-   case "$cmd" in prepare) color=blue;; start) color=yellow;; *) fail 'HEAD must match origin/main';; esac
+   case "$cmd" in start) color=yellow;; *) fail 'HEAD must match origin/main';; esac
    python3 scripts/full-multi-spec.py verify-pending --instance "$INSTANCE" --color "$color" --base "$base" --head "$head"
    [[ "$(git rev-parse HEAD)" == "$head" ]] || fail 'HEAD changed during pending commit verification'
    git push origin "$head:refs/heads/main"
@@ -62,33 +62,15 @@ ready(){
      echo "ROLLOUT $name phase=${phase:-Unreconciled} step=${step:-none} desired=$desired"
      previous="$phase/$step"
    fi
-   if [[ "$phase" == Healthy && "$desired" == healthy ]];then
-     if [[ "$cmd" == prepare ]];then
-       marker="$(oc -n "$NS" get rollout "$name" -o jsonpath='{.spec.template.metadata.annotations.demo-rollout-revision}')"
-       generation="$(oc -n "$NS" get rollout "$name" -o jsonpath='{.metadata.generation}')"
-       observed="$(oc -n "$NS" get rollout "$name" -o jsonpath='{.status.observedGeneration}')"
-       [[ "$marker" == baseline-blue ]] || fail "$name: expected Blue baseline, got $marker"
-       if [[ "$observed" != "$generation" ]];then sleep "$POLL_SECONDS";continue;fi
-     fi
-     return 0
-   fi
-   if [[ "$phase" == Paused ]];then
-     if [[ "$desired" == paused ]];then
-       marker="$(oc -n "$NS" get rollout "$name" -o jsonpath='{.spec.template.metadata.annotations.demo-rollout-revision}')"
-       generation="$(oc -n "$NS" get rollout "$name" -o jsonpath='{.metadata.generation}')"
-       observed="$(oc -n "$NS" get rollout "$name" -o jsonpath='{.status.observedGeneration}')"
-       [[ "$marker" == "$candidate_marker" ]] || fail "$name: candidate marker changed ($marker)"
-       if [[ "$observed" != "$generation" ]];then sleep "$POLL_SECONDS";continue;fi
-       # HTTP canaries must reach 50%; CRUD pauses without a timer.
-       if [[ "$name" == crud-* || "$step" == "$CANARY_PAUSE_STEP_INDEX" ]];then return 0;fi
-     elif [[ "$desired" == healthy && "$cmd" == prepare ]];then
-       # An explicit PREPARE operation may rebaseline Blue; never promote a
-       # YELLOW/GREEN candidate under the guise of returning to health.
-       marker="$(oc -n "$NS" get rollout "$name" -o jsonpath='{.spec.template.metadata.annotations.demo-rollout-revision}')"
-       [[ "$marker" == baseline-blue ]] || fail "$name: refuse to promote non-Blue marker=$marker"
-       oc argo rollouts promote "$name" -n "$NS"
-       continue
-     fi
+   if [[ "$phase" == Healthy && "$desired" == healthy ]];then return 0;fi
+   if [[ "$phase" == Paused && "$desired" == paused ]];then
+     marker="$(oc -n "$NS" get rollout "$name" -o jsonpath='{.spec.template.metadata.annotations.demo-rollout-revision}')"
+     generation="$(oc -n "$NS" get rollout "$name" -o jsonpath='{.metadata.generation}')"
+     observed="$(oc -n "$NS" get rollout "$name" -o jsonpath='{.status.observedGeneration}')"
+     [[ "$marker" == "$candidate_marker" ]] || fail "$name: candidate marker changed ($marker)"
+     if [[ "$observed" != "$generation" ]];then sleep "$POLL_SECONDS";continue;fi
+     # HTTP canaries must reach 50%; CRUD pauses without a timer.
+     if [[ "$name" == crud-* || "$step" == "$CANARY_PAUSE_STEP_INDEX" ]];then return 0;fi
    fi
    [[ "$phase" != Degraded ]] || fail "$name degraded"
    sleep "$POLL_SECONDS"
@@ -141,7 +123,13 @@ case "$cmd" in
      --namespace "$NS" --timeout "$TIMEOUT_SECONDS" --poll "$POLL_SECONDS"
    echo 'PASS: full-multi GitOps synchronized and workloads ready; HTTP/Tempo acceptance remains separate'
    ;;
- prepare|start)
+ prepare)
+   # One authoritative reset implementation: selected form of global prepare.
+   # It aborts a paused GREEN candidate, never promotes GREEN, and changes
+   # only the selected application's three Rollout templates/history.
+   exec python3 scripts/full-multi-global.py prepare --instance "$INSTANCE" --apply --push
+   ;;
+ start)
    check_git
    python3 scripts/full-multi-spec.py verify
    require oc
@@ -149,60 +137,34 @@ case "$cmd" in
    python3 scripts/full-multi-bootstrap.py preflight \
      --namespace "$NS" --argocd-namespace "$ARGOCD_NS"
    oc get application "$APP" -n "$ARGOCD_NS" >/dev/null || fail 'Run deploy first'
-   if [[ "$cmd" == prepare ]];then
-     # Refuse to overwrite the deliberately paused GREEN demo preview. A
-     # technical BLUE-to-BLUE image update (such as CRUD v5) is allowed here.
+   # Read-only grants are mandatory before enabling the Green preview.
+   bash scripts/full-multi-db-readonly.sh --verify
+   source_marker="$(sed -n 's/^        demo-rollout-revision: //p' "full-multi/rollout-crud-$INSTANCE.yaml")"
+   if [[ "$source_marker" == baseline-blue ]];then
      phase="$(oc -n "$NS" get rollout "crud-$INSTANCE" -o jsonpath='{.status.phase}')"
-     if [[ "$phase" == Paused ]];then
-       track="$(oc -n "$NS" get rollout "crud-$INSTANCE" -o jsonpath='{.spec.template.metadata.labels.demo\.crud-track}')"
-       [[ "$track" == blue ]] || fail "crud-$INSTANCE has a paused GREEN preview; promote it explicitly after the demo before preparing"
-     fi
-     python3 scripts/full-multi-history-prune.py --instance "$INSTANCE"
-     commit_stage blue
+     color="$(oc -n "$NS" get rollout "crud-$INSTANCE" -o jsonpath='{.spec.template.metadata.labels.demo\.crud-track}')"
+     [[ "$phase" == Healthy && "$color" == blue ]] || fail "crud-$INSTANCE must be Healthy/Blue before start (phase=$phase track=$color)"
+     commit_stage yellow
+   elif [[ "$source_marker" =~ ^candidate-yellow-[0-9]{8}T[0-9]{6}Z$ ]];then
+     python3 scripts/full-multi-spec.py set --instance "$INSTANCE" --color yellow
+     echo "Resuming existing candidate $source_marker"
    else
-     # Read-only MariaDB grants are mandatory before opening Green preview.
-     bash scripts/full-multi-db-readonly.sh --verify
-     source_marker="$(sed -n 's/^        demo-rollout-revision: //p' "full-multi/rollout-crud-$INSTANCE.yaml")"
-     if [[ "$source_marker" == baseline-blue ]];then
-       # Only create a new candidate from a confirmed healthy Blue baseline.
-       phase="$(oc -n "$NS" get rollout "crud-$INSTANCE" -o jsonpath='{.status.phase}')"
-       color="$(oc -n "$NS" get rollout "crud-$INSTANCE" -o jsonpath='{.spec.template.metadata.labels.demo\.crud-track}')"
-       [[ "$phase" == Healthy && "$color" == blue ]] || fail "crud-$INSTANCE must be Healthy/Blue before start (phase=$phase track=$color)"
-       commit_stage yellow
-     elif [[ "$source_marker" =~ ^candidate-yellow-[0-9]{8}T[0-9]{6}Z$ ]];then
-       # This also verifies that all three source templates name the same
-       # candidate; it does not create a new timestamp on a retry.
-       python3 scripts/full-multi-spec.py set --instance "$INSTANCE" --color yellow
-       echo "Resuming existing candidate $source_marker"
-     else
-       fail "Unrecognized desired revision $source_marker"
-     fi
+     fail "Unrecognized desired revision $source_marker"
    fi
    sync_git
-   if [[ "$cmd" == start ]];then
-     candidate_marker="$(sed -n 's/^        demo-rollout-revision: //p' "full-multi/rollout-crud-$INSTANCE.yaml")"
-     for tier in crud backend front; do
-       marker="$(oc -n "$NS" get rollout "$tier-$INSTANCE" -o jsonpath='{.spec.template.metadata.annotations.demo-rollout-revision}')"
-       [[ "$marker" == "$candidate_marker" ]] || fail "$tier-$INSTANCE: live candidate $marker differs from Git $candidate_marker"
-     done
-     phase="$(oc -n "$NS" get rollout "crud-$INSTANCE" -o jsonpath='{.status.phase}')"
-     observed="$(oc -n "$NS" get rollout "crud-$INSTANCE" -o jsonpath='{.status.observedGeneration}')"
-     generation="$(oc -n "$NS" get rollout "crud-$INSTANCE" -o jsonpath='{.metadata.generation}')"
-     [[ "$phase" != Healthy || "$observed" != "$generation" ]] || fail "crud-$INSTANCE candidate is already Healthy; refusing to recreate or promote it"
-   fi
-   for tier in crud backend front;do ready "$tier-$INSTANCE" "$([[ "$cmd" == prepare ]] && echo healthy || echo paused)";done
-   if [[ "$cmd" == start ]];then
-     python3 scripts/full-multi-crud-pause-gate.py --instance "$INSTANCE"
-     # HTTP + SQL verification for this application's two independent paths.
-     bash scripts/full-multi-validate-data-paths.sh --instance "$INSTANCE"
-   fi
-   if [[ "$cmd" == prepare ]];then
-     python3 scripts/full-multi-history-reset.py --instance "$INSTANCE" --timeout-seconds "$TIMEOUT_SECONDS"
-     echo "CRUD history pruning is included in the selected lifecycle tiers"
-     echo "PASS: Full-multi $INSTANCE BLUE prepared; history reset"
-   else
-     echo "PASS: Full-multi $INSTANCE Front/Backend paused at 50%; CRUD Blue active and Green preview BOTH ready and Paused indefinitely. Promote only by explicit command."
-   fi
+   candidate_marker="$(sed -n 's/^        demo-rollout-revision: //p' "full-multi/rollout-crud-$INSTANCE.yaml")"
+   for tier in crud backend front; do
+     marker="$(oc -n "$NS" get rollout "$tier-$INSTANCE" -o jsonpath='{.spec.template.metadata.annotations.demo-rollout-revision}')"
+     [[ "$marker" == "$candidate_marker" ]] || fail "$tier-$INSTANCE: live candidate $marker differs from Git $candidate_marker"
+   done
+   phase="$(oc -n "$NS" get rollout "crud-$INSTANCE" -o jsonpath='{.status.phase}')"
+   observed="$(oc -n "$NS" get rollout "crud-$INSTANCE" -o jsonpath='{.status.observedGeneration}')"
+   generation="$(oc -n "$NS" get rollout "crud-$INSTANCE" -o jsonpath='{.metadata.generation}')"
+   [[ "$phase" != Healthy || "$observed" != "$generation" ]] || fail "crud-$INSTANCE candidate is already Healthy; refusing to recreate or promote it"
+   for tier in crud backend front;do ready "$tier-$INSTANCE" paused;done
+   python3 scripts/full-multi-crud-pause-gate.py --instance "$INSTANCE"
+   bash scripts/full-multi-validate-data-paths.sh --instance "$INSTANCE"
+   echo "PASS: Full-multi $INSTANCE Front/Backend paused at 50%; CRUD Blue active and Green preview BOTH ready and Paused indefinitely. Promote only by explicit command."
    ;;
  promote)
    require oc

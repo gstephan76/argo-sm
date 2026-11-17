@@ -16,7 +16,7 @@ class GlobalWorkflowTests(unittest.TestCase):
         def obj(role, app, track="blue", marker="baseline-blue"):
             env = [{"name": "MESSAGE_PREFIX", "value": f"Application {app.upper()} - BLUE"},
                    {"name": "DB_TRACK", "value": track},
-                   {"name": "DB_HOST", "value": f"mariadb-{app}-{track}.full-multi.svc.cluster.local"}]
+                   {"name": "DB_HOST", "value": f"mariadb-{app}-{track}.multi-ambient.svc.cluster.local"}]
             return {"spec": {"template": {"metadata": {"annotations": {"demo-rollout-revision": marker},
                                                "labels": {"demo.crud-track": track}},
                                           "spec": {"containers": [{"env": env}]}}}}
@@ -48,7 +48,7 @@ class GlobalWorkflowTests(unittest.TestCase):
         origin='https://github.com/gstephan76/argo-sm.git'
         local='a'*40
         remote='b'*40
-        responses=['main', origin, origin, '', local, remote, local, local, local]
+        responses=['multi-ambient', origin, origin, '', local, remote, local, local, local]
         pending=subprocess.CompletedProcess([], 0, local+'\n', '')
         with patch.object(M, 'git', side_effect=responses), patch.object(M, 'silent', return_value=pending), patch.object(M, 'call') as call:
             self.assertEqual(M.assert_git_clean(), local)
@@ -56,11 +56,11 @@ class GlobalWorkflowTests(unittest.TestCase):
         verify=next(i for i,c in enumerate(commands) if 'verify-pending' in c)
         push=next(i for i,c in enumerate(commands) if c[:2]==['git','push'])
         self.assertLess(verify,push)
-        self.assertEqual(commands[push], ['git','push','origin',f'{local}:refs/heads/main'])
+        self.assertEqual(commands[push], ['git','push','origin',f'{local}:refs/heads/multi-ambient'])
 
     def test_invalid_pending_global_commit_is_never_pushed(self):
         origin='https://github.com/gstephan76/argo-sm.git'
-        responses=['main', origin, origin, '', 'a'*40, 'b'*40]
+        responses=['multi-ambient', origin, origin, '', 'a'*40, 'b'*40]
         def execute(args, **kwargs):
             if 'verify-pending' in args:
                 raise M.Failure('invalid pending commit')
@@ -141,7 +141,7 @@ class GlobalWorkflowTests(unittest.TestCase):
              patch.object(M, 'call') as commands, patch.object(M.time, 'sleep'):
             M.wait_blue_rollouts(timeout=5)
             commands.assert_called_once_with(
-                ['oc', 'argo', 'rollouts', 'retry', 'rollout', 'crud-a', '-n', 'full-multi'], timeout=60)
+                ['oc', 'argo', 'rollouts', 'retry', 'rollout', 'crud-a', '-n', 'multi-ambient'], timeout=60)
 
     def test_sm_branch_rejection(self):
         with patch.object(M, "git", side_effect=["main", "https://github.com/gstephan76/SM.git"]):

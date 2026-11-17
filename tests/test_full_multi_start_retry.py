@@ -1,5 +1,6 @@
 """Exercise retry orchestration with simulated Git, Argo CD and Rollouts."""
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -13,7 +14,7 @@ args = sys.argv[1:]
 with open(os.environ['CALL_LOG'], 'a') as f:
     f.write('git ' + ' '.join(args) + '\\n')
 if args[:2] == ['branch', '--show-current']:
-    print('main')
+    print('multi-ambient')
 elif args and args[0] == 'rev-parse':
     if 'refs/full-multi/pending' in args:
         sys.exit(1)
@@ -50,6 +51,10 @@ class StartRetryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             shutil.copytree(ROOT / 'full-multi', root / 'full-multi')
+            for path in (root / 'full-multi').glob('rollout-*.yaml'):
+                text = path.read_text()
+                path.write_text(re.sub(r'(?m)^(        demo-rollout-revision: )\S+',
+                                       r'\g<1>candidate-yellow-20261115T233842Z', text))
             (root / 'scripts').mkdir()
             for name in ('full-multi.sh', 'full-multi-db-readonly.sh'):
                 shutil.copy(ROOT / 'scripts' / name, root / 'scripts' / name)

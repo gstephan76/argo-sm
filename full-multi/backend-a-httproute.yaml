@@ -1,0 +1,32 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: backend-a-router
+  namespace: multi-ambient
+spec:
+  parentRefs:
+  - group: ''
+    kind: Service
+    name: backend-a-stable
+  rules:
+  - matches:
+    - headers:
+      - name: x-backend-track
+        value: canary
+    backendRefs:
+    - name: backend-a-canary
+      port: 5000
+  - matches:
+    - headers:
+      - name: x-backend-track
+        value: stable
+    backendRefs:
+    - name: backend-a-stable
+      port: 5000
+  - backendRefs:
+    - name: backend-a-stable
+      port: 5000
+      weight: 100
+    - name: backend-a-canary
+      port: 5000
+      weight: 0

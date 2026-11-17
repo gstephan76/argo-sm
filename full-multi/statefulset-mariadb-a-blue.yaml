@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: mariadb-a-blue
-  namespace: full-multi
+  namespace: multi-ambient
   annotations:
     argocd.argoproj.io/sync-wave: '-2'
 spec:
@@ -19,7 +19,6 @@ spec:
         app: mariadb-a-blue
         app.kubernetes.io/name: full-multi-mariadb
         demo.database-track: blue
-        sidecar.istio.io/inject: 'true'
     spec:
       containers:
         - name: mariadb

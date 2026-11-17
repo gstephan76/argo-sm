@@ -61,9 +61,12 @@ def preflight(ns, argocd_ns):
     if namespace is None:
         raise BootstrapError(f'Namespace {ns} missing; run deploy to create it')
     labels = (namespace.get('metadata') or {}).get('labels') or {}
-    for key in ('istio-discovery', 'istio-injection'):
-        if labels.get(key) != 'enabled':
-            raise BootstrapError(f'Namespace {ns} requires label {key}=enabled')
+    if labels.get('istio-discovery') != 'enabled' or labels.get('istio.io/dataplane-mode') != 'ambient':
+        raise BootstrapError(f'Namespace {ns} requires discovery and ambient labels')
+    if labels.get('istio-injection') == 'enabled' or labels.get('istio.io/rev'):
+        raise BootstrapError(f'Namespace {ns} still enables sidecar injection')
+    if labels.get('istio.io/use-waypoint') != 'full-multi-waypoint':
+        raise BootstrapError(f'Namespace {ns} requires the full-multi waypoint')
 
     secrets = {app: oc_json('-n', ns, 'get', 'secret', f'db-credentials-{app}',
                             allow_missing=True) for app in 'ab'}
@@ -103,16 +106,99 @@ def preflight(ns, argocd_ns):
     print('OK  GitOps namespace accessible', flush=True)
 
 
+def check_cutover_rollouts(items, allow_empty=False):
+    """Refuse to supersede any running or paused demonstration revision."""
+    indexed = {x.get('metadata', {}).get('name'): x for x in items}
+    if not indexed and allow_empty:
+        return
+    missing = sorted(EXPECTED_ROLLOUTS - set(indexed))
+    if missing:
+        raise BootstrapError('Cannot establish completed demo: missing Rollouts ' + ', '.join(missing))
+    for name in sorted(EXPECTED_ROLLOUTS):
+        obj = indexed[name]
+        spec, status = obj.get('spec') or {}, obj.get('status') or {}
+        generation = int(obj.get('metadata', {}).get('generation') or 1)
+        observed = int(status.get('observedGeneration') or 0)
+        if (status.get('phase') != 'Healthy' or observed < generation or
+                spec.get('paused') or status.get('pauseConditions') or status.get('abort')):
+            raise BootstrapError(f'{name} is not fully completed and healthy; finish the paused demo before ambient cutover')
+
+
+def preflight_ambient_platform(namespace):
+    for name in ('httproutes.gateway.networking.k8s.io', 'gateways.gateway.networking.k8s.io'):
+        oc_json('get', 'crd', name)
+    for name in ('istio', 'istio-waypoint'):
+        oc_json('get', 'gatewayclasses.gateway.networking.k8s.io', name)
+    istio = oc_json('-n', 'istio-system', 'get', 'istios.sailoperator.io', 'default')
+    if (istio.get('spec') or {}).get('profile') != 'ambient':
+        raise BootstrapError('Istio/default must use the ambient profile before cutover')
+    ztunnels = oc_json('get', 'ztunnels.sailoperator.io', '-A').get('items') or []
+    if not any(any(c.get('type') == 'Ready' and c.get('status') == 'True'
+                   for c in (z.get('status') or {}).get('conditions') or []) for z in ztunnels):
+        raise BootstrapError('No Ready ZTunnel resource found')
+    managers = oc_json('get', 'rolloutmanager', '-A').get('items') or []
+    compatible = []
+    for m in managers:
+        if not manager_ready(m):
+            continue
+        for plugin in ((m.get('spec') or {}).get('plugins') or {}).get('trafficManagement') or []:
+            if (plugin.get('name') == 'argoproj-labs/gatewayAPI' and
+                    '/v0.17.0/' in str(plugin.get('location') or '')):
+                compatible.append(m)
+    if not compatible:
+        raise BootstrapError('A Ready cluster-scoped RolloutManager must configure the verified Gateway API plugin v0.17.0; see ambient runbook')
+    # A configured plugin is insufficient if its controller cannot update routes.
+    owner_ns = compatible[0]['metadata']['namespace']
+    deployment = oc_json('-n', owner_ns, 'get', 'deployment', 'argo-rollouts')
+    service_account = (((deployment.get('spec') or {}).get('template') or {}).get('spec') or {}).get('serviceAccountName')
+    if not service_account:
+        raise BootstrapError('Cannot identify the Rollouts controller service account')
+    principal = f'system:serviceaccount:{owner_ns}:{service_account}'
+    for verb, resource in [('get', 'services'), ('get', 'httproutes.gateway.networking.k8s.io'),
+                           ('list', 'httproutes.gateway.networking.k8s.io'),
+                           ('update', 'httproutes.gateway.networking.k8s.io'),
+                           ('patch', 'httproutes.gateway.networking.k8s.io')]:
+        cmd = ['oc', 'auth', 'can-i', verb, resource, '-n', namespace, '--as', principal]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if result.returncode or result.stdout.strip() != 'yes':
+            raise BootstrapError(f'Cannot verify {principal} can {verb} {resource} in {namespace}: '
+                                 f'{result.stderr.strip() or result.stdout.strip()}')
+
+
 def preflight_deploy(ns, argocd_ns, app_name):
     app = oc_json('-n', argocd_ns, 'get', 'application', app_name, allow_missing=True)
-    if app is not None and (app.get('spec') or {}).get('syncPolicy', {}).get('automated', {}).get('prune') is False:
+    if app is not None:
+        spec = app.get('spec') or {}
+        source = spec.get('source') or {}
+        destination = spec.get('destination') or {}
+        if (source.get('path') != 'full-multi' or
+                source.get('targetRevision') != 'multi-ambient' or
+                source.get('repoURL') != 'https://github.com/gstephan76/argo-sm.git' or
+                destination.get('server') != 'https://kubernetes.default.svc' or
+                destination.get('namespace') != ns):
+            raise BootstrapError('Existing Application source or destination differs; refusing takeover')
+    policy = ((app or {}).get('spec') or {}).get('syncPolicy') or {}
+    automatic = policy.get('automated')
+    if isinstance(automatic, dict) and automatic.get('prune') is False:
         raise BootstrapError('Existing Application has pruning disabled; refuse to re-enable it. '
                              'Complete and authorize the protected migration first.')
-    if oc_json('get', 'namespace', ns, allow_missing=True) is not None:
+    namespace = oc_json('get', 'namespace', ns, allow_missing=True)
+    if namespace is not None:
         items = oc_json('-n', ns, 'get', 'rollouts.argoproj.io').get('items') or []
         legacy = sorted({x.get('metadata', {}).get('name') for x in items} & {'mariadb-a', 'mariadb-b'})
         if legacy:
             raise BootstrapError(f'Legacy MariaDB Rollouts {legacy} exist; refuse pruning-enabled deployment')
+        labels = (namespace.get('metadata') or {}).get('labels') or {}
+        source = ((app or {}).get('spec') or {}).get('source') or {}
+        migrating = (labels.get('istio.io/dataplane-mode') != 'ambient' or
+                     source.get('targetRevision') not in (None, 'multi-ambient'))
+        if migrating:
+            check_cutover_rollouts(items, allow_empty=app is None)
+            if app is not None and isinstance(automatic, dict) and automatic.get('enabled', True):
+                raise BootstrapError('Disable Argo CD automatic sync before sidecar-to-ambient cutover')
+    elif app is not None:
+        raise BootstrapError('Existing Application has no namespace; refusing cutover')
+    preflight_ambient_platform(ns)
 
 
 def sync_snapshot(app, target, allow_legacy_prune_disabled=False):
@@ -132,7 +218,7 @@ def sync_snapshot(app, target, allow_legacy_prune_disabled=False):
         bool(out_of_sync) and all(
             r.get('group') == 'argoproj.io' and r.get('kind') == 'Rollout' and
             r.get('name') in ('mariadb-a', 'mariadb-b') and
-            r.get('namespace') == 'full-multi' and r.get('requiresPruning') is True
+            r.get('namespace') == 'multi-ambient' and r.get('requiresPruning') is True
             for r in out_of_sync))
     return {
         'revision': sync.get('revision') or '',
@@ -210,12 +296,43 @@ def readiness_report(items, gateway):
     return problems, degraded
 
 
+def gateway_api_readiness(gateways, routes):
+    problems = []
+    for name in ('full-multi-gateway', 'full-multi-waypoint'):
+        obj = gateways.get(name)
+        if not obj:
+            problems.append(f'{name}: Gateway missing')
+            continue
+        generation = int((obj.get('metadata') or {}).get('generation') or 1)
+        conditions = (obj.get('status') or {}).get('conditions') or []
+        if not any(c.get('type') == 'Programmed' and c.get('status') == 'True' and
+                   int(c.get('observedGeneration') or 0) >= generation for c in conditions):
+            problems.append(f'{name}: Gateway not Programmed for current generation')
+    names = ['full-multi-front-router'] + [f'{tier}-{app}-router'
+             for tier in ('backend', 'crud') for app in 'ab']
+    for name in names:
+        obj = routes.get(name)
+        if not obj:
+            problems.append(f'{name}: HTTPRoute missing')
+            continue
+        generation = int((obj.get('metadata') or {}).get('generation') or 1)
+        parents = (obj.get('status') or {}).get('parents') or []
+        def ready(parent):
+            conditions = parent.get('conditions') or []
+            return all(any(c.get('type') == kind and c.get('status') == 'True' and
+                           int(c.get('observedGeneration') or 0) >= generation
+                           for c in conditions) for kind in ('Accepted', 'ResolvedRefs'))
+        if not any(ready(parent) for parent in parents):
+            problems.append(f'{name}: HTTPRoute not accepted or references unresolved')
+    return problems
+
+
 def wait_ready(ns, timeout, poll):
     deadline = time.monotonic() + timeout
     last_report = None
     while True:
         items = oc_json('-n', ns, 'get', 'rollouts.argoproj.io').get('items') or []
-        gateway = oc_json('-n', ns, 'get', 'deployment', 'full-multi-ingressgateway',
+        gateway = oc_json('-n', ns, 'get', 'deployment', 'full-multi-gateway-istio',
                           allow_missing=True)
         if gateway is None:
             pending, degraded = ['ingressgateway: Deployment missing'], []
@@ -257,6 +374,12 @@ def wait_ready(ns, timeout, poll):
                                  f'. Inspect `oc -n {ns} get events --sort-by=.lastTimestamp` '
                                  'and `oc describe` for the affected Rollout/Deployment.')
         if not pending:
+            gateways = {x['metadata']['name']: x for x in
+                        (oc_json('-n', ns, 'get', 'gateways.gateway.networking.k8s.io').get('items') or [])}
+            routes = {x['metadata']['name']: x for x in
+                      (oc_json('-n', ns, 'get', 'httproutes.gateway.networking.k8s.io').get('items') or [])}
+            pending.extend(gateway_api_readiness(gateways, routes))
+        if not pending:
             route = oc_json('-n', ns, 'get', 'route', 'full-multi')
             host = (route.get('spec') or {}).get('host')
             if not host:
@@ -273,9 +396,9 @@ def wait_ready(ns, timeout, poll):
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('command', choices=['preflight', 'preflight-deploy', 'wait-sync', 'wait-ready'])
-    p.add_argument('--namespace', default='full-multi')
+    p.add_argument('--namespace', default='multi-ambient')
     p.add_argument('--argocd-namespace', default='openshift-gitops')
-    p.add_argument('--application', default='full-multi')
+    p.add_argument('--application', default='multi-ambient')
     p.add_argument('--revision')
     p.add_argument('--timeout', type=int, default=900)
     p.add_argument('--poll', type=int, default=5)

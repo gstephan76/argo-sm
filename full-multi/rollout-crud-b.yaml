@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: Rollout
 metadata:
   name: crud-b
-  namespace: full-multi
+  namespace: multi-ambient
   annotations:
     argocd.argoproj.io/sync-wave: '1'
 spec:
@@ -17,12 +17,11 @@ spec:
   template:
     metadata:
       annotations:
-        demo-rollout-revision: candidate-yellow-20261106T183337Z
+        demo-rollout-revision: baseline-blue
       labels:
         app: crud-b
-        demo.crud-track: green
+        demo.crud-track: blue
         app.kubernetes.io/name: full-multi-crud
-        sidecar.istio.io/inject: 'true'
     spec:
       containers:
         - name: crud
@@ -36,9 +35,9 @@ spec:
             - name: MESSAGE_PREFIX
               value: "Application B - CRUD"
             - name: DB_HOST
-              value: mariadb-b-green.full-multi.svc.cluster.local
+              value: mariadb-b-blue.multi-ambient.svc.cluster.local
             - name: DB_TRACK
-              value: green
+              value: blue
             - name: DB_NAME
               value: bookdb
             - name: DB_USER

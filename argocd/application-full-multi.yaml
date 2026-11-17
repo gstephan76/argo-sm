@@ -1,46 +1,27 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: full-multi
+  name: multi-ambient
   namespace: openshift-gitops
 spec:
   project: default
   source:
     repoURL: https://github.com/gstephan76/argo-sm.git
-    targetRevision: main
+    targetRevision: multi-ambient
     path: full-multi
   destination:
     server: https://kubernetes.default.svc
-    namespace: full-multi
+    namespace: multi-ambient
   ignoreDifferences:
     - group: ""
       kind: Service
       jqPathExpressions:
         - '.spec.selector."rollouts-pod-template-hash"'
-    - group: networking.istio.io
-      kind: VirtualService
-      name: front-a-router
-      namespace: full-multi
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      namespace: multi-ambient
       jqPathExpressions:
-        - '.spec.http[] | select(.name == "primary") | .route[].weight'
-    - group: networking.istio.io
-      kind: VirtualService
-      name: front-b-router
-      namespace: full-multi
-      jqPathExpressions:
-        - '.spec.http[] | select(.name == "secondary") | .route[].weight'
-    - group: networking.istio.io
-      kind: VirtualService
-      name: backend-a-router
-      namespace: full-multi
-      jqPathExpressions:
-        - '.spec.http[] | select(.name == "backend-a-default") | .route[].weight'
-    - group: networking.istio.io
-      kind: VirtualService
-      name: backend-b-router
-      namespace: full-multi
-      jqPathExpressions:
-        - '.spec.http[] | select(.name == "backend-b-default") | .route[].weight'
+        - '.spec.rules[].backendRefs[] | select(.name == "front-a-stable" or .name == "front-a-canary" or .name == "front-b-stable" or .name == "front-b-canary" or .name == "backend-a-stable" or .name == "backend-a-canary" or .name == "backend-b-stable" or .name == "backend-b-canary") | .weight'
   syncPolicy:
     automated:
       prune: true

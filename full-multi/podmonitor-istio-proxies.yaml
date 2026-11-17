@@ -5,7 +5,7 @@ apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
 metadata:
   name: full-multi-istio-proxies
-  namespace: full-multi
+  namespace: multi-ambient
   annotations:
     argocd.argoproj.io/sync-wave: '0'
 spec:

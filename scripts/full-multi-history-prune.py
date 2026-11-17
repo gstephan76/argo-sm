@@ -14,7 +14,7 @@ import sys
 from full_multi_oc import run_oc
 from datetime import datetime, timezone
 
-NS = 'full-multi'
+NS = 'multi-ambient'
 FINAL = {'Successful', 'Failed', 'Inconclusive', 'Error'}
 TIERS = ('crud', 'backend', 'front')
 

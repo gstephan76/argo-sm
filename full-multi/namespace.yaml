@@ -1,7 +1,9 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: full-multi
+  name: multi-ambient
   labels:
     istio-discovery: enabled
-    istio-injection: enabled
+    argocd.argoproj.io/managed-by: openshift-gitops
+    istio.io/dataplane-mode: ambient
+    istio.io/use-waypoint: full-multi-waypoint

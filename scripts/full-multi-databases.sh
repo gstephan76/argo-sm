@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Explicit staging of four new persistent MariaDB instances before GitOps cutover.
+# Explicit staging of four new persistent MariaDB instances before GitOps deployment.
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-NS=full-multi
+NS=multi-ambient
 [[ "${1:-}" == "--apply" && $# -eq 1 ]] || {
   echo 'Usage: bash scripts/full-multi-databases.sh --apply' >&2; exit 2;
 }
@@ -27,4 +27,4 @@ for app in a b; do
   done
 done
 echo 'PASS four independent MariaDB StatefulSets and their persistent PVCs are ready.'
-echo 'NEXT: verify images/datasets, then deliberately authorize the GitOps cutover.'
+echo 'NEXT: verify images/datasets, then deliberately deploy the GitOps Application.'

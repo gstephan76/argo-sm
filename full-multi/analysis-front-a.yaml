@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: AnalysisTemplate
 metadata:
   name: smoke-front-a
-  namespace: full-multi
+  namespace: multi-ambient
   annotations:
     argocd.argoproj.io/sync-wave: '1'
 spec:
@@ -31,12 +31,12 @@ spec:
                       - -c
                       - |
                         set -eu
-                        url=http://front-a-canary.full-multi.svc.cluster.local/info
+                        url=http://front-a-canary.multi-ambient.svc.cluster.local/info
                         n=1
                         while [ "$n" -le 15 ]; do
                           reply="$(curl -fsS --max-time 8 "$url")"
                           echo "$reply" | grep -Fq 'Application A - {{args.expected-color}}' || exit 1
-                          curl -fsS --max-time 8 "http://front-a-canary.full-multi.svc.cluster.local/api/books" | grep -Fq '"books"' || exit 1
+                          curl -fsS --max-time 8 "http://front-a-canary.multi-ambient.svc.cluster.local/api/books" | grep -Fq '"books"' || exit 1
                           n=$((n + 1))
                           sleep 1
                         done

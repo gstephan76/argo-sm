@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Full-multi global setup and deterministic Blue rebaseline.
 
-Canonical external dependency: gstephan76/SM branch v3.5, v3/v3.5/.
+Ambient Service Mesh and the Gateway API plugin are shared platform prerequisites.
 All writes require --apply. GitOps changes require --push. No PVC deletion.
 """
 from __future__ import annotations
@@ -83,8 +83,8 @@ def git(*args, cwd=ROOT):
 
 def assert_git_clean(instance="all"):
     branch = git("branch", "--show-current")
-    if branch != "main":
-        raise Failure(f"argo-sm must be on branch main; found {branch!r}")
+    if branch != "multi-ambient":
+        raise Failure(f"argo-sm must be on branch multi-ambient; found {branch!r}")
     origins = {"https://github.com/gstephan76/argo-sm", "https://github.com/gstephan76/argo-sm.git",
                "git@github.com:gstephan76/argo-sm", "git@github.com:gstephan76/argo-sm.git",
                "ssh://git@github.com/gstephan76/argo-sm", "ssh://git@github.com/gstephan76/argo-sm.git"}
@@ -95,9 +95,9 @@ def assert_git_clean(instance="all"):
     tracked = git("status", "--porcelain", "--untracked-files=no")
     if tracked:
         raise Failure("Tracked changes are present; stash/commit your changes before setup/prepare:\n" + tracked)
-    call(["git", "fetch", "origin", "main"], cwd=ROOT, timeout=120)
+    call(["git", "fetch", "origin", "multi-ambient"], cwd=ROOT, timeout=120)
     local = git("rev-parse", "HEAD")
-    remote = git("rev-parse", "origin/main")
+    remote = git("rev-parse", "origin/multi-ambient")
     pending_proc = silent(["git", "rev-parse", "--verify", "--quiet", "refs/full-multi/pending"], cwd=ROOT)
     if pending_proc.returncode not in (0, 1):
         raise Failure("Cannot inspect pending workflow reference")
@@ -107,9 +107,9 @@ def assert_git_clean(instance="all"):
               "--color", "blue", "--base", remote, "--head", local], cwd=ROOT, timeout=90)
         if git("rev-parse", "HEAD") != local:
             raise Failure("HEAD changed during pending commit verification")
-        call(["git", "push", "origin", f"{local}:refs/heads/main"], cwd=ROOT, timeout=180)
-        call(["git", "fetch", "origin", "main"], cwd=ROOT, timeout=120)
-        if git("rev-parse", "HEAD") != local or git("rev-parse", "origin/main") != local:
+        call(["git", "push", "origin", f"{local}:refs/heads/multi-ambient"], cwd=ROOT, timeout=180)
+        call(["git", "fetch", "origin", "multi-ambient"], cwd=ROOT, timeout=120)
+        if git("rev-parse", "HEAD") != local or git("rev-parse", "origin/multi-ambient") != local:
             raise Failure("Git changed during push recovery")
         call(["git", "update-ref", "-d", "refs/full-multi/pending", local], cwd=ROOT)
     elif pending:
@@ -133,11 +133,11 @@ def preflight_local():
     call(["oc", "get", "namespace", "openshift-gitops"], timeout=35)
     for key in ("applications.argoproj.io", "rollouts.argoproj.io", "rolloutmanagers.argoproj.io"):
         call(["oc", "get", "crd", key], timeout=35)
-    app_ns = maybe_oc_json("get", "namespace", "full-multi")
+    app_ns = maybe_oc_json("get", "namespace", "multi-ambient")
     if app_ns is not None:
         labels = app_ns.get("metadata", {}).get("labels", {})
-        if any(labels.get(k) != "enabled" for k in ("istio-discovery", "istio-injection")):
-            raise Failure("Existing full-multi namespace lacks required mesh discovery/injection labels")
+        if labels.get("istio-discovery") != "enabled":
+            raise Failure("Existing multi-ambient namespace lacks mesh discovery label")
 
 
 def check_sm_repo(sm_repo: Path):
@@ -164,7 +164,7 @@ def sm_namespaces(sm_base):
             if match:
                 value = match.group(1)
                 break
-    ordered = list(dict.fromkeys([*value.split(), "istio-system", "bookinfo", "full-multi"]))
+    ordered = list(dict.fromkeys([*value.split(), "istio-system", "bookinfo", "multi-ambient"]))
     for name in ordered:
         if not re.fullmatch(r"[a-z0-9]([-a-z0-9]*[a-z0-9])?", name):
             raise Failure(f"Invalid mesh namespace in SM configuration: {name!r}")
@@ -187,7 +187,7 @@ def verify_images():
 
 
 def assert_no_legacy_mariadb():
-    raw = ocjson("-n", "full-multi", "get", "rollouts.argoproj.io")
+    raw = ocjson("-n", "multi-ambient", "get", "rollouts.argoproj.io")
     names = {x["metadata"]["name"] for x in raw.get("items", [])}
     bad = names & {"mariadb-a", "mariadb-b"}
     if bad:
@@ -228,7 +228,7 @@ def verify_db_volumes():
     names = [f"mariadb-data-mariadb-{app}-{track}-0" for app in APPS for track in TRACKS]
     pvs = []
     for name in names:
-        pvc = ocjson("-n", "full-multi", "get", "pvc", name)
+        pvc = ocjson("-n", "multi-ambient", "get", "pvc", name)
         phase = pvc.get("status", {}).get("phase")
         pv = pvc.get("spec", {}).get("volumeName")
         if phase != "Bound" or not pv:
@@ -240,16 +240,16 @@ def verify_db_volumes():
 
 
 def wait_gitops(revision, timeout=900):
-    call(["oc", "-n", "openshift-gitops", "annotate", "application", "full-multi",
+    call(["oc", "-n", "openshift-gitops", "annotate", "application", "multi-ambient",
           "argocd.argoproj.io/refresh=hard", "--overwrite"], timeout=45)
     call([sys.executable, 'scripts/full-multi-bootstrap.py', 'wait-sync',
-          '--application', 'full-multi', '--argocd-namespace', 'openshift-gitops',
+          '--application', 'multi-ambient', '--argocd-namespace', 'openshift-gitops',
           '--revision', revision, '--timeout', str(timeout), '--poll', '5',
           '--allow-legacy-prune-disabled'], cwd=ROOT, timeout=timeout + 60)
 
 
 def rollout(name):
-    return ocjson("-n", "full-multi", "get", "rollouts.argoproj.io", name)
+    return ocjson("-n", "multi-ambient", "get", "rollouts.argoproj.io", name)
 
 
 def env_value(obj, key):
@@ -268,7 +268,7 @@ def blue_template(obj, name):
     if name.startswith("crud-"):
         return (obj.get("spec", {}).get("template", {}).get("metadata", {}).get("labels", {}).get("demo.crud-track") == "blue"
                 and env_value(obj, "DB_TRACK") == "blue"
-                and env_value(obj, "DB_HOST") == f"mariadb-{app}-blue.full-multi.svc.cluster.local")
+                and env_value(obj, "DB_HOST") == f"mariadb-{app}-blue.multi-ambient.svc.cluster.local")
     return env_value(obj, "MESSAGE_PREFIX") == f"Application {app.upper()} - BLUE"
 
 
@@ -296,7 +296,7 @@ def wait_blue_rollouts(timeout=900, apps=APPS):
                     continue
                 if status.get("abort"):
                     if name not in retried:
-                        call(["oc", "argo", "rollouts", "retry", "rollout", name, "-n", "full-multi"], timeout=60)
+                        call(["oc", "argo", "rollouts", "retry", "rollout", name, "-n", "multi-ambient"], timeout=60)
                         retried.add(name)
                     continue
                 if phase == "Degraded":
@@ -304,7 +304,7 @@ def wait_blue_rollouts(timeout=900, apps=APPS):
                 if phase == "Paused":
                     if role != "crud" and int(status.get("currentStepIndex") or 0) != 6:
                         raise Failure(f"{name}: unexpected Canary pause step {status.get('currentStepIndex')}; refusing auto promotion")
-                    call(["oc", "argo", "rollouts", "promote", name, "-n", "full-multi"], timeout=60)
+                    call(["oc", "argo", "rollouts", "promote", name, "-n", "multi-ambient"], timeout=60)
                 elif (phase == "Healthy" and status.get("stableRS") and
                       status.get("stableRS") == status.get("currentPodHash") and
                       int(status.get("availableReplicas") or 0) >= int(r.get("spec", {}).get("replicas", 1))):
@@ -328,7 +328,7 @@ def abort_pending_rollouts(apps=APPS):
             if phase in ("Paused", "Progressing") and status.get("stableRS") and (
                     status.get("stableRS") != status.get("currentPodHash")):
                 log(f"ABORT candidate {name}: {phase}. This is the requested reset to Blue")
-                call(["oc", "argo", "rollouts", "abort", name, "-n", "full-multi"], timeout=60)
+                call(["oc", "argo", "rollouts", "abort", name, "-n", "multi-ambient"], timeout=60)
 
 
 def commit_blue(apps=APPS):
@@ -349,7 +349,7 @@ def commit_blue(apps=APPS):
         call(["git", "commit", "-m", subject], cwd=ROOT)
         head = git("rev-parse", "HEAD")
         call(["git", "update-ref", "refs/full-multi/pending", head, ""], cwd=ROOT)
-        call(["git", "push", "origin", f"{head}:refs/heads/main"], cwd=ROOT, timeout=180)
+        call(["git", "push", "origin", f"{head}:refs/heads/multi-ambient"], cwd=ROOT, timeout=180)
         call(["git", "update-ref", "-d", "refs/full-multi/pending", head], cwd=ROOT)
     else:
         log("PASS Git desired templates already Blue; no commit necessary")
@@ -358,7 +358,7 @@ def commit_blue(apps=APPS):
 
 def baseline_e2e(apps=APPS):
     """Check HTTP -> Front -> Backend -> CRUD -> each A/B English DB."""
-    route = ocjson("-n", "full-multi", "get", "route", "full-multi")
+    route = ocjson("-n", "multi-ambient", "get", "route", "full-multi")
     host = route.get("spec", {}).get("host", "")
     if not host:
         raise Failure("Route/full-multi lacks .spec.host")
@@ -371,7 +371,7 @@ def baseline_e2e(apps=APPS):
             data = json.loads(raw)
         except ValueError as exc:
             raise Failure(f"Application {app}: invalid JSON response") from exc
-        expected_host = f"mariadb-{app}-blue.full-multi.svc.cluster.local"
+        expected_host = f"mariadb-{app}-blue.multi-ambient.svc.cluster.local"
         checks = {
             "application": app.upper(),
             "database_track": "blue",
@@ -396,11 +396,11 @@ def baseline_e2e(apps=APPS):
 
 def ensure_gitops_app():
     call([sys.executable, 'scripts/full-multi-bootstrap.py', 'preflight-deploy'], cwd=ROOT, timeout=80)
-    current = maybe_oc_json("-n", "openshift-gitops", "get", "application", "full-multi")
+    current = maybe_oc_json("-n", "openshift-gitops", "get", "application", "multi-ambient")
     if current:
         source = current.get("spec", {}).get("source", {})
         if (source.get("path") != "full-multi" or
-                source.get("targetRevision") != "main" or
+                source.get("targetRevision") != "multi-ambient" or
                 "gstephan76/argo-sm" not in source.get("repoURL", "")):
             raise Failure("Existing Argo CD Application has a different source; refuse takeover")
     call(["oc", "apply", "-f", "argocd/application-full-multi.yaml"], cwd=ROOT, timeout=90)
@@ -408,30 +408,12 @@ def ensure_gitops_app():
 
 
 def setup(args):
-    sm = check_sm_repo(args.sm_repo)
     assert_git_clean()
     preflight_local()
     verify_images()
     call([sys.executable, 'scripts/full-multi-bootstrap.py', 'preflight-deploy'], cwd=ROOT, timeout=80)
-    log("SM v3.5: preinstalled OLM Operators required; missing CSVs/CRDs will fail in check-prereqs.sh")
-    # Bootstrap init-env does not overwrite tenant UUID or credentials.
-    call(["bash", str(sm / "scripts/init-env.sh")], cwd=sm, timeout=60)
-    # Namespace must exist when SM applies proxy PodMonitor for full-multi.
+    log("Ambient mesh and Gateway API plugin are shared platform prerequisites")
     call(["oc", "apply", "-f", "full-multi/namespace.yaml"], cwd=ROOT, timeout=45)
-    env = os.environ.copy()
-    env["MESH_NAMESPACES"] = sm_namespaces(sm)
-    env["RUN_E2E"] = "1"  # SM validates its own Bookinfo + traces + metrics
-    env["DEPLOY_BOOKINFO"] = "1"
-    env["BOOTSTRAP_MCG"] = "1" if args.bootstrap_mcg else "0"
-    # The default v3.5 mesh-base behavior on fresh cluster is explicit opt-in.
-    mesh_exists = maybe_oc_json("-n", "istio-system", "get", "istio", "default")
-    env["APPLY_MESH_BASE"] = "0" if mesh_exists else "1"
-    if args.bootstrap_mcg:
-        log("INFO ODF standalone MCG gp3-csi bootstrap enabled (AWS-specific)")
-    else:
-        log("INFO MCG bootstrap disabled; existing NooBaa must be healthy")
-    call(["bash", str(sm / "scripts/apply.sh")], cwd=sm, env=env, timeout=5400)
-    call(["bash", str(sm / "scripts/postcheck.sh")], cwd=sm, env=env, timeout=1800)
     # The SM stack does not install OpenShift GitOps or its Rollouts operator.
     check_rollout_manager()
     assert_no_legacy_mariadb()
@@ -451,13 +433,13 @@ def setup(args):
     # Fresh-cluster GitOps should first deploy Blue, never the repository's
     # potentially paused Yellow demonstration template. An existing Argo CD
     # Application is reset by rebaseline() after its source is verified.
-    if maybe_oc_json("-n", "openshift-gitops", "get", "application", "full-multi") is None:
+    if maybe_oc_json("-n", "openshift-gitops", "get", "application", "multi-ambient") is None:
         log("Fresh deployment: publishing Blue baseline before creating Argo CD Application")
         commit_blue()
     ensure_gitops_app()
     wait_gitops(git("rev-parse", "HEAD"))
     rebaseline(args, verified=True)
-    log("PASS full-multi global setup: SM v3.5 E2E + all six Blue Rollouts + four SQL databases")
+    log("PASS full-multi global setup: ambient prerequisites + all six Blue Rollouts + four SQL databases")
 
 
 def rebaseline(args, *, verified=False):
@@ -508,14 +490,10 @@ def paused_e2e():
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("setup", "prepare", "e2e", "status"))
-    parser.add_argument("--sm-repo", type=Path, default=ROOT.parent / "ServiceMesh",
-                        help="Checkout of gstephan76/SM branch v3.5 (default: ../ServiceMesh)")
-    parser.add_argument("--bootstrap-mcg", action="store_true",
-                        help="Explicitly allow the AWS gp3-csi ODF/MCG bootstrap from SM v3.5")
     parser.add_argument("--instance", choices=("a", "b", "all"), default="all",
                         help="Application to reset (prepare only; default: all)")
     parser.add_argument("--apply", action="store_true", help="Allow writes to cluster and/or Git")
-    parser.add_argument("--push", action="store_true", help="Authorize GitOps main commits and push")
+    parser.add_argument("--push", action="store_true", help="Authorize GitOps multi-ambient commits and push")
     parser.add_argument("--state", choices=("blue", "paused"), default="blue", help="E2E target state")
     parser.add_argument("--timeout", type=int, default=1200)
     args = parser.parse_args(argv)
@@ -524,7 +502,7 @@ def main(argv=None):
     if args.timeout < 60:
         parser.error("--timeout must be >=60 seconds")
     if args.command in ("setup", "prepare") and not (args.apply and args.push):
-        stages = ("SM v3.5 prereqs -> apply.sh (19 stages) -> four DBs -> GitOps -> Blue rebaseline -> E2E -> history reset"
+        stages = ("ambient platform prerequisites -> four DBs -> GitOps -> Blue rebaseline -> E2E -> history reset"
                   if args.command == "setup" else
                   f"verify prerequisites -> abort {args.instance} pending candidates -> GitOps Blue rebaseline -> E2E -> clean selected histories")
         log(f"PLAN ONLY ({args.command}): {stages}")
@@ -540,9 +518,9 @@ def main(argv=None):
         elif args.command == "e2e":
             baseline_e2e() if args.state == "blue" else paused_e2e()
         else:
-            call(["oc", "-n", "full-multi", "get", "rollouts.argoproj.io"])
-            call(["oc", "-n", "full-multi", "get", "statefulsets,pvc"])
-            call(["oc", "-n", "openshift-gitops", "get", "application", "full-multi"])
+            call(["oc", "-n", "multi-ambient", "get", "rollouts.argoproj.io"])
+            call(["oc", "-n", "multi-ambient", "get", "statefulsets,pvc"])
+            call(["oc", "-n", "openshift-gitops", "get", "application", "multi-ambient"])
         return 0
     except Failure as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

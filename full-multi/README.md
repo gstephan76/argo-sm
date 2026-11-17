@@ -1,6 +1,6 @@
 # full-multi — two isolated applications, six Rollouts, four MariaDB databases
 
-This is the **current** OpenShift GitOps topology. Application A and B use the
+This branch defines the **ambient-mode** OpenShift GitOps topology. See [AMBIENT.md](AMBIENT.md) for prerequisites and deployment. Application A and B use the
 same demonstration code and the same book catalogs, but **never share** a database,
 StatefulSet, Service, PVC or SQL connection. Frontend/Backend have independent
 Argo Rollouts Canary strategies, while CRUD-A/B have native Argo Rollouts
@@ -45,16 +45,20 @@ Frontend and Backend Canary tracks are independent from the CRUD language:
 
 ## Runbook
 
-Prerequisites: the Argo Rollouts controller and CLI, OpenShift credentials,
-existing `db-credentials-a/b` Secrets, GitHub access, default StorageClass,
-and three public OCI images (`full-multi-crud-v5`, English 20, Portuguese 20).
-The four MariaDB databases are already installed in the migration cluster.
+Prerequisites follow the original `full-multi` workflow: OpenShift GitOps,
+a cluster-scoped Argo Rollouts controller and CLI, OpenShift and GitHub access,
+a default StorageClass, and the existing Bookshelf and MariaDB images. Local
+setup also uses `oc`, Git, Python, Bash, `jq`, `curl`, and `skopeo`. For first
+provisioning, supply `FULL_MULTI_DB_PASSWORD` and `FULL_MULTI_DB_ROOT_PASSWORD`;
+the setup creates new Secrets and four independent PVCs in `multi-ambient`.
+Ambient canary routing additionally requires the Gateway API plugin described in
+[AMBIENT.md](AMBIENT.md).
 
 ```bash
 cd ~/Documents/POCs/argo-sm
 python3 scripts/full-multi-spec.py verify
 (cd full-multi/bookshelf && go test -count=1 ./...)
-# Only for a new environment; creates 4 StatefulSets and four independent PVCs:
+# For first provisioning, after creating the namespace and Secrets:
 bash scripts/full-multi-databases.sh --apply
 # After the initial 20-book seed, enforce table-scoped application privileges:
 bash scripts/full-multi-db-readonly.sh --apply
@@ -82,7 +86,7 @@ INSTANCE=b scripts/full-multi promote  # explicit action only
 including a paused GREEN candidate. It safely aborts that candidate; it does
 not promote GREEN or touch the other application's Rollouts/Git templates.
 The four MariaDB StatefulSets and their PVCs remain intact. Because `prepare`
-changes the selected GitOps manifests, it commits and pushes `main` using the
+changes the selected GitOps manifests, it commits and pushes `multi-ambient` using the
 same verified pending-commit recovery contract as global prepare. It validates
 SQL grants without rewriting the other application's database privileges.
 
@@ -132,7 +136,7 @@ for another demo, run `prepare` and `start` again.
 For user-visible data-path verification:
 
 ```bash
-HOST="$(oc -n full-multi get route full-multi -o jsonpath='{.spec.host}')"
+HOST="$(oc -n multi-ambient get route full-multi -o jsonpath='{.spec.host}')"
 for app in a b; do
   for db in blue green; do
     curl -kfsS -H "x-app-target: $app" -H 'x-front-track: stable' \
@@ -142,21 +146,14 @@ for app in a b; do
 done
 ```
 
-### GitOps and migration
+### GitOps deployment
 
-`argocd/application-full-multi.yaml` tracks `main` with `prune: true`, intended
-for the *final* six-Rollout topology. While retaining the two old ephemeral
-MariaDB Rollouts during a protected transition, **keep live pruning disabled**.
-Do not run `full-multi.sh deploy` or reapply the Application YAML until the
-cutover and required cleanup are explicitly completed. No old database data
-needs migrating. Application data is disposable seed data, but PVC ownership
-and separation are hard requirements. `scripts/full-multi-databases.sh` stages
-only the four new DB resources without changing old ones.
-
-Deploy and global setup refuse to enable pruning when the live Application has
-pruning disabled or legacy MariaDB Rollouts remain. During protected migration,
-the GitOps wait permits OutOfSync only when all reported differences are the
-recognized obsolete MariaDB Rollouts awaiting pruning.
+`argocd/application-full-multi.yaml` declares the separate Argo CD Application
+`multi-ambient`, tracking branch `multi-ambient` into namespace `multi-ambient`.
+The original `full-multi` Application and namespace remain independent. The
+ambient deployment provisions its own credentials and four new MariaDB PVCs;
+it does not migrate the original databases. See [AMBIENT.md](AMBIENT.md)
+for platform prerequisites and deployment verification.
 
 ### Code ownership and maintenance
 

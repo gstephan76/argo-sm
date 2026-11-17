@@ -17,7 +17,7 @@ if [[ "${1:-help}" == start && "${INSTANCE:-all}" == all ]]; then
 fi
 INSTANCE="${INSTANCE:-a}"
 [[ "$INSTANCE" == a || "$INSTANCE" == b ]] || { echo 'INSTANCE must be a or b' >&2; exit 1; }
-NS=full-multi; APP=full-multi; ARGOCD_NS="${ARGOCD_NAMESPACE:-openshift-gitops}"
+NS=multi-ambient; APP=multi-ambient; ARGOCD_NS="${ARGOCD_NAMESPACE:-openshift-gitops}"
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-900}"; POLL_SECONDS="${POLL_SECONDS:-5}"
 # Front/Backend Canary: step 6 pauses at 50%; CRUD BlueGreen has no canary step.
 CANARY_PAUSE_STEP_INDEX=6
@@ -32,21 +32,21 @@ valid_origin(){
 }
 check_git(){
  require git
- [[ "$(git branch --show-current)" == main ]] || fail 'Must be on main'
+ [[ "$(git branch --show-current)" == multi-ambient ]] || fail 'Must be on multi-ambient'
  git diff --quiet && git diff --cached --quiet || fail 'Commit tracked changes first'
  valid_origin "$(git remote get-url origin)" || fail 'Unexpected fetch origin'
  valid_origin "$(git remote get-url --push --all origin)" || fail 'Unexpected or multiple push origins'
- git fetch origin main
+ git fetch origin multi-ambient
  local head base color pending
- head="$(git rev-parse HEAD)"; base="$(git rev-parse origin/main)"
+ head="$(git rev-parse HEAD)"; base="$(git rev-parse origin/multi-ambient)"
  pending="$(git rev-parse --verify --quiet refs/full-multi/pending || :)"
  if [[ "$head" != "$base" ]];then
-   case "$cmd" in start) color=yellow;; *) fail 'HEAD must match origin/main';; esac
+   case "$cmd" in start) color=yellow;; *) fail 'HEAD must match origin/multi-ambient';; esac
    python3 scripts/full-multi-spec.py verify-pending --instance "$INSTANCE" --color "$color" --base "$base" --head "$head"
    [[ "$(git rev-parse HEAD)" == "$head" ]] || fail 'HEAD changed during pending commit verification'
-   git push origin "$head:refs/heads/main"
-   git fetch origin main
-   [[ "$(git rev-parse HEAD)" == "$head" && "$(git rev-parse origin/main)" == "$head" ]] || fail 'Git changed during push recovery'
+   git push origin "$head:refs/heads/multi-ambient"
+   git fetch origin multi-ambient
+   [[ "$(git rev-parse HEAD)" == "$head" && "$(git rev-parse origin/multi-ambient)" == "$head" ]] || fail 'Git changed during push recovery'
    git update-ref -d refs/full-multi/pending "$head"
  elif [[ -n "$pending" ]];then
    [[ "$pending" == "$head" ]] || fail 'Unexpected pending workflow reference; inspect Git state'
@@ -100,7 +100,7 @@ commit_stage(){
    local head
    head="$(git rev-parse HEAD)"
    git update-ref refs/full-multi/pending "$head" ''
-   git push origin "$head:refs/heads/main"
+   git push origin "$head:refs/heads/multi-ambient"
    git update-ref -d refs/full-multi/pending "$head"
  fi
 }
@@ -204,7 +204,7 @@ case "$cmd" in
  status)
    oc get rollouts.argoproj.io -n "$NS"
    oc get svc -n "$NS"
-   oc get virtualservices -n "$NS"
+   oc get httproutes.gateway.networking.k8s.io -n "$NS"
    oc get route full-multi -n "$NS"
    oc -n "$ARGOCD_NS" get application "$APP" \
      -o custom-columns='NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status,REVISION:.status.sync.revision'

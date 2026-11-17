@@ -1,0 +1,42 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: crud-a-router
+  namespace: multi-ambient
+spec:
+  parentRefs:
+  - group: ''
+    kind: Service
+    name: crud-a-blue
+  rules:
+  - matches:
+    - headers:
+      - name: x-db-track
+        value: green
+    backendRefs:
+    - name: crud-a-green
+      port: 8080
+  - matches:
+    - headers:
+      - name: x-db-track
+        value: canary
+    backendRefs:
+    - name: crud-a-green
+      port: 8080
+  - matches:
+    - headers:
+      - name: x-db-track
+        value: blue
+    backendRefs:
+    - name: crud-a-blue
+      port: 8080
+  - matches:
+    - headers:
+      - name: x-db-track
+        value: stable
+    backendRefs:
+    - name: crud-a-blue
+      port: 8080
+  - backendRefs:
+    - name: crud-a-active
+      port: 8080

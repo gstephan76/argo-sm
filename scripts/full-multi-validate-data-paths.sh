@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Read-only HTTP verification while CRUD Blue/Green revisions coexist.
 set -Eeuo pipefail
-NS=full-multi
+NS=multi-ambient
 for command in oc curl jq; do
   command -v "$command" >/dev/null || { echo "Missing: $command" >&2; exit 1; }
 done
@@ -22,7 +22,7 @@ HOST="$(oc -n "$NS" get route full-multi -o jsonpath='{.spec.host}')"
 for app in $APPS; do
   python3 "$(dirname "$0")/full-multi-crud-pause-gate.py" --instance "$app"
   for track in blue green; do
-    expected_host="mariadb-${app}-${track}.full-multi.svc.cluster.local"
+    expected_host="mariadb-${app}-${track}.multi-ambient.svc.cluster.local"
     case "$track" in
       blue) title='Pride and Prejudice';;
       green) title='Memórias Póstumas de Brás Cubas';;

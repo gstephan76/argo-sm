@@ -6,14 +6,13 @@ resources:
   - analysis-backend-b.yaml
   - analysis-front-a.yaml
   - analysis-front-b.yaml
-  - backend-a-virtualservice.yaml
-  - backend-b-virtualservice.yaml
-  - crud-a-virtualservice.yaml
-  - crud-b-virtualservice.yaml
-  - front-a-router.yaml
-  - front-b-router.yaml
-  - front-virtualservice.yaml
   - gateway.yaml
+  - waypoint.yaml
+  - front-httproute.yaml
+  - backend-a-httproute.yaml
+  - backend-b-httproute.yaml
+  - crud-a-httproute.yaml
+  - crud-b-httproute.yaml
   - namespace.yaml
   - rollout-backend-a.yaml
   - rollout-backend-b.yaml

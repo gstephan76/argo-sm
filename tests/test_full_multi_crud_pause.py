@@ -16,7 +16,7 @@ def sample(track, h, app='a'):
                                'rollouts-pod-template-hash':h}},
         'spec':{'containers':[{'name':'crud','env':[
             {'name':'APP_ID','value':app.upper()},
-            {'name':'DB_HOST','value':f'mariadb-{app}-{track}.full-multi.svc.cluster.local'},
+            {'name':'DB_HOST','value':f'mariadb-{app}-{track}.multi-ambient.svc.cluster.local'},
             {'name':'DB_TRACK','value':track}]}]},
         'status':{'phase':'Running','conditions':[{'type':'Ready','status':'True'}]}}
 

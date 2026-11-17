@@ -47,7 +47,7 @@ def verify():
         match=re.search(r'demo\.crud-track: (blue|green)',cr)
         assert match,app
         track=match.group(1)
-        assert f'              value: mariadb-{app}-{track}.full-multi.svc.cluster.local' in cr
+        assert f'              value: mariadb-{app}-{track}.multi-ambient.svc.cluster.local' in cr
         assert f'              value: {track}\n' in cr
         assert 'full-multi-crud-v5' in cr
         for tr,image in DB_IMAGES.items():
@@ -63,16 +63,16 @@ def verify():
             svc=(D/f'service-crud-{app}-{role}.yaml').read_text()
             assert f'  name: crud-{app}-{role}' in svc
             assert 'demo.crud-track' not in svc
-        vs=(D/f'crud-{app}-virtualservice.yaml').read_text()
+        vs=(D/f'crud-{app}-httproute.yaml').read_text()
         for needle in (f'crud-{app}-blue',f'crud-{app}-green',f'crud-{app}-active',
-                       'x-db-track:', 'exact: green','exact: stable'):
+                       'x-db-track', 'value: green','value: stable'):
             assert needle in vs,(app,needle)
         assert 'x-crud-db-target' not in vs
         backend=(D/f'rollout-backend-{app}.yaml').read_text()
-        assert f'http://crud-{app}-blue.full-multi.svc.cluster.local:8080/api/books' in backend
+        assert f'http://crud-{app}-blue.multi-ambient.svc.cluster.local:8080/api/books' in backend
         assert '            - name: DB_PASSWORD' not in backend
         front=(D/f'rollout-front-{app}.yaml').read_text()
-        assert f'http://backend-{app}-stable.full-multi.svc.cluster.local:5000/api/books' in front
+        assert f'http://backend-{app}-stable.multi-ambient.svc.cluster.local:5000/api/books' in front
     go=(D/'bookshelf/main.go').read_text()
     assert 'os.Getenv("DB_HOST")' in go and 'os.Getenv("DB_TRACK")' in go
     assert 's.queryBooks(r.Context())' in go and 'x-crud-db-target' not in go
@@ -97,7 +97,7 @@ def transform(s, tier, instance, color, marker):
         tr='blue' if color=='blue' else 'green'
         s,n=re.subn(r'(        demo\.crud-track: )(blue|green)',lambda m:m[1]+tr,s)
         assert n==1, tier
-        s,n=re.subn(r'(              value: mariadb-'+instance+r'-)(blue|green)(\.full-multi\.svc\.cluster\.local)',
+        s,n=re.subn(r'(              value: mariadb-'+instance+r'-)(blue|green)(\.multi-ambient\.svc\.cluster\.local)',
                     lambda m:m[1]+tr+m[3],s)
         assert n==1, tier
         s,n=re.subn(r'(?m)(            - name: DB_TRACK\n              value: )(blue|green)$',lambda m:m[1]+tr,s)
@@ -136,7 +136,7 @@ def verify_pending(instance, color, base, head):
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout
     assert re.fullmatch(r'[0-9a-f]{40,64}', base) and re.fullmatch(r'[0-9a-f]{40,64}', head)
     assert git('rev-parse', '--verify', 'refs/full-multi/pending').strip()==head, 'Pending workflow reference does not identify HEAD'
-    assert git('rev-list', '--parents', '-n', '1', head).strip().split() == [head,base], 'Pending commit must have origin/main as its sole parent'
+    assert git('rev-list', '--parents', '-n', '1', head).strip().split() == [head,base], 'Pending commit must have origin/multi-ambient as its sole parent'
     apps='ab' if instance=='all' else instance
     subject=('Prepare full-multi: deterministic Blue baseline' if instance=='all' else
              f'Set full-multi instance {instance} {color}')

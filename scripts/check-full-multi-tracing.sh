@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-NS=full-multi
+NS=multi-ambient
 for tool in oc jq; do command -v "$tool" >/dev/null || { echo "Missing $tool" >&2; exit 1; }; done
 printf '\n== Istio mesh tracing provider ==\n'
 oc -n istio-system get istio default -o json | jq '{tracing: .spec.values.meshConfig.enableTracing, rootNamespace: .spec.values.meshConfig.rootNamespace, providers: [.spec.values.meshConfig.extensionProviders[]? | select(.opentelemetry != null) | {name, opentelemetry}]}'
-printf '\n== Effective Telemetry objects (inspect mesh root and full-multi) ==\n'
+printf '\n== Effective Telemetry objects (inspect mesh root and multi-ambient) ==\n'
 oc get telemetries.telemetry.istio.io -A -o custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name,PROVIDER:.spec.tracing[*].providers[*].name,SAMPLING:.spec.tracing[*].randomSamplingPercentage'
-printf '\n== full-multi Rollouts and Pods / injected containers ==\n'
+printf '\n== multi-ambient Rollouts and Pods / containers ==\n'
 oc get rollouts.argoproj.io -n "$NS"
 oc get pods -n "$NS" -o json | jq -r '.items[] | [.metadata.name, (.spec.containers|map(.name)|join(",")), (.status.phase // "?")] | @tsv'
-printf '\n== full-multi routing and metric targets ==\n'
-oc get route,virtualservice,podmonitor -n "$NS" 2>&1 || true
+printf '\n== multi-ambient routing and metric targets ==\n'
+oc get routes.route.openshift.io,httproutes.gateway.networking.k8s.io,gateways.gateway.networking.k8s.io,podmonitors.monitoring.coreos.com -n "$NS" 2>&1 || true
 printf '\n== Collector and TempoStack ==\n'
 oc get opentelemetrycollectors.opentelemetry.io -A
 oc get tempostacks.tempo.grafana.com -A

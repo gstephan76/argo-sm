@@ -17,8 +17,7 @@ Canonical topology and commands: [README.md](README.md).
   inspection; account changes across the four databases are not atomic.
 - `scripts/full-multi-spec.py verify` checks local manifests.
 - `scripts/full-multi.sh deploy` applies the Argo CD Application, **including
-  its declared automatic pruning**. Never invoke deploy during a protected
-  migration where obsolete MariaDB Rollouts must remain.
+  its declared automatic pruning** for the separate `multi-ambient` Application.
 - `prepare` establishes Blue, `start` creates a paused Green preview,
   and `promote` is an explicit user action. No automatic CRUD promotion.
 

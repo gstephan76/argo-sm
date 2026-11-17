@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Safely delete prior completed Rollout-owned history for the three rollout tiers of one app."""
 import argparse,json,subprocess,time,sys
-NAMESPACE='full-multi'
+NAMESPACE='multi-ambient'
 FINAL={'Successful','Failed','Inconclusive','Error'}
 from full_multi_oc import run_oc
 def get(kind,name=None):return json.loads(run_oc('get',kind,*([name] if name else []),'-n',NAMESPACE,'-o','json'))

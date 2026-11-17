@@ -23,17 +23,16 @@ are equivalent. Headers select paths via Istio; SQL connections are native TCP.
 
 The projected `bookshelf-release-theme` ConfigMap controls Frontend/Backend
 appearance; the Go HTTP tiers propagate `traceparent`, `tracestate`, `baggage`,
-`x-request-id`, and B3 headers so Istio proxy traces can correlate requests.
+`x-request-id`, and B3 headers so gateway and waypoint traces can correlate requests.
 `Telemetry/full-multi-tracing` selects the `otel-tracing` provider, which must
-be configured in the shared Istio control plane. `PodMonitor` collects proxy
-metrics where user-workload monitoring is enabled. MariaDB TCP traffic alone
+be configured in the shared Istio control plane. `PodMonitor` selects injected gateway and waypoint proxies when their scrape annotations are present. ZTunnel metrics are a shared-platform responsibility. Verify actual scrape targets after deployment. MariaDB TCP traffic alone
 does **not** supply SQL query spans.
 
 Inspect the existing pipeline without changing shared platform resources:
 
 ```bash
 bash scripts/check-full-multi-tracing.sh
-oc -n full-multi get telemetry full-multi-tracing -o yaml
+oc -n multi-ambient get telemetry full-multi-tracing -o yaml
 oc get kiali -A
 oc -n tempo get tempostack
 ```
@@ -46,3 +45,7 @@ installer scripts. The application tracing code is already integrated.
 
 Acceptance: verify 2xx responses for all four Blue/Green paths, Kiali workload
 metrics, trace export counters, tenant routing, and retrieval from Tempo.
+
+The optional `full-multi-otel-k8sattributes.py` and its RBAC manifest target
+the original `full-multi` namespace and the shared Collector. They are not
+part of this ambient deployment and do not provide ambient namespace enrichment.

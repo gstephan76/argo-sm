@@ -7,7 +7,7 @@ import unittest
 
 SCRIPT = Path(__file__).resolve().parents[1] / 'scripts/full-multi-secrets.sh'
 FAKE_OC = '''#!/usr/bin/env python3
-import os, sys
+import base64, json, os, sys
 args = sys.argv[1:]
 with open(os.environ['OC_CALL_LOG'], 'a') as f:
     f.write(' '.join(args) + '\\n')
@@ -19,14 +19,22 @@ if 'get' in args:
     if mode == 'existing':
         print('secret/' + args[args.index('secret') + 1])
 if 'create' in args:
-    sys.stdin.read()
+    content = sys.stdin.read()
+    if os.environ['OC_TEST_MODE'] == 'demo':
+        docs = [json.loads(x) for x in content.split('---') if x.strip()]
+        assert len(docs) == 2
+        assert all(x['metadata']['namespace'] == 'multi-ambient' for x in docs)
+        p = [base64.b64decode(x['data']['password']) for x in docs]
+        r = [base64.b64decode(x['data']['root-password']) for x in docs]
+        assert len(p[0]) >= 32 and len(r[0]) >= 32 and p[0] == p[1] and r[0] == r[1] and p[0] != r[0]
+        sys.exit(0)
     print('AlreadyExists', file=sys.stderr)
     sys.exit(1)
 '''
 
 
 class SecretProvisioningTests(unittest.TestCase):
-    def run_script(self, mode):
+    def run_script(self, mode, args=()):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             oc = root / 'oc'
@@ -36,8 +44,15 @@ class SecretProvisioningTests(unittest.TestCase):
             env = dict(os.environ, PATH=f'{root}:{os.environ["PATH"]}', OC_CALL_LOG=str(log),
                        OC_TEST_MODE=mode, FULL_MULTI_DB_PASSWORD='fake',
                        FULL_MULTI_DB_ROOT_PASSWORD='fake-root')
-            result = subprocess.run(['bash', str(SCRIPT)], env=env, capture_output=True, text=True)
+            result = subprocess.run(['bash', str(SCRIPT), *args], env=env, capture_output=True, text=True)
             return result, log.read_text()
+
+    def test_generate_demo_creates_both_secrets_without_printing_values(self):
+        result, calls = self.run_script('demo', ('--generate-demo',))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('create -f -', calls)
+        self.assertNotIn('fake-root', result.stdout + result.stderr + calls)
+        self.assertNotIn('fake', result.stdout + result.stderr + calls)
 
     def test_get_error_does_not_attempt_secret_write(self):
         result, calls = self.run_script('error')

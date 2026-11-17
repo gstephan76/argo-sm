@@ -10,7 +10,7 @@ import json
 import subprocess
 import sys
 
-NS='full-multi'
+NS='multi-ambient'
 
 class Failed(RuntimeError):
     pass
@@ -67,7 +67,7 @@ def verify(app):
     pvnames=[]
     for track,h in [('blue',stable),('green',current)]:
         expected_db=f'mariadb-{app}-{track}'
-        expected_host=expected_db+'.full-multi.svc.cluster.local'
+        expected_host=expected_db+'.multi-ambient.svc.cluster.local'
         matches=[p for p in allpods if ready(p) and
                  p['metadata'].get('labels',{}).get('demo.crud-track')==track and
                  p['metadata'].get('labels',{}).get('rollouts-pod-template-hash')==h and

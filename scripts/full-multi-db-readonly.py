@@ -9,7 +9,7 @@ import re
 import subprocess
 import sys
 
-NAMESPACE = 'full-multi'
+NAMESPACE = 'multi-ambient'
 ACCOUNT = "'bookapp'@'%'"
 TARGET = '`bookdb`.`books`'
 TABLE_PRIVILEGES = {'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP',

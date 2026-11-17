@@ -1,54 +1,55 @@
 # full-multi: global setup and prepare
 
-## Authoritative repositories
+## Ambient platform prerequisites
 
-- Demo: `https://github.com/gstephan76/argo-sm`, branch `main`.
-- Service Mesh: `https://github.com/gstephan76/SM`, **branch `v3.5`**, installation directory **`v3/v3.5/`**. No OSSM 3.4 baseline scripts are invoked.
+The demo tracks `multi-ambient`. Its shared Istio control plane, ambient CNI,
+ZTunnel, Gateway API, Rollouts plugin and observability stack must already be
+installed by their owners. The sidecar-oriented `SM/v3/v3.5` installer is not
+run by the ambient setup workflow. See [AMBIENT.md](AMBIENT.md) before deployment.
+The original `full-multi` requirements still apply: OpenShift GitOps and
+Rollouts CRDs, a cluster-scoped Rollouts controller and CLI, appropriate
+cluster and GitHub access, a StorageClass, the existing application images,
+and the local `oc`, Git, Python, Bash, `jq`, `curl`, and `skopeo` tools. The
+ambient HTTPRoutes also require the Gateway API traffic plugin on that same
+controller. Existing mesh and observability services are reused.
 
-The Service Mesh 3.5 installer performs 19 stages (OSSM 3.5, user workload monitoring, ODF/NooBaa S3, Tempo, OpenTelemetry, Kiali, console integrations, Bookinfo and its end-to-end checks). `MESH_NAMESPACES` includes `full-multi` so proxy monitoring covers the demo as well. SM's existing `.env` and its `TEMPO_TENANT_ID` are preserved.
-
-**Operator prerequisite:** `SM/v3/v3.5/scripts/check-prereqs.sh` requires already-installed supported Red Hat Operators and their CRDs (OSSM 3.5, Kiali, OTel, Tempo, Cluster Observability when UI is enabled). The ODF operator can be installed via SM's AWS-specific standalone MCG bootstrap. OpenShift GitOps with Rollouts CRDs and an `openshift-gitops` namespace is also required. The global script verifies these prerequisites, but does not fabricate Operator subscriptions or alter incompatible cluster-wide installations. It will fail with actionable errors until they are present.
-
-## Installation
-
-Install using `python3 install_global_workflows.py --repo . --check` followed by
-`--apply` from this bundle. This copies the two wrappers, Python controller,
-unit tests and documentation, and patches `scripts/full-multi.sh` to make
-`start` cover both A/B by default. Review and commit these changes before
-running the workflows (their GitOps preflight refuses dirty tracked files).
-
-Ensure the SM checkout uses the right branch:
+Install the missing GitOps prerequisites separately, using the same script
+for an initial installation and after an interruption:
 
 ```bash
-cd ~/Documents/POCs/ServiceMesh
-git fetch origin v3.5
-git switch v3.5
-git pull --ff-only origin v3.5
+python3 scripts/full-multi-install-prereqs.py --check
+python3 scripts/full-multi-install-prereqs.py --apply
 ```
 
-The existing SM `.env` is deliberately not deleted or overwritten. New installations may use `v3/v3.5/scripts/init-env.sh`, which generates a tenant UUID once.
+The installer uses the approved `latest` GitOps Operator channel, enables the
+operator's OpenShift `gitops-plugin` console UI, reuses or creates a single
+cluster-scoped RolloutManager, configures the Gateway API plugin, and grants
+its service account only the required permissions in `multi-ambient`. It
+preserves unrelated console plugins and traffic plugins, and refuses conflicting
+existing resources. It does not install Service Mesh, OpenTelemetry or Tempo.
+After installation, verify the plugin has loaded in the controller logs; an
+Available RolloutManager alone does not prove that the plugin can run.
 
-## Setup from a new OCP 4.22 AWS cluster
+For disposable demo credentials, provision new Secrets once with:
 
 ```bash
-cd ~/Documents/POCs/argo-sm
+bash scripts/full-multi-secrets.sh --generate-demo
+```
+
+It uses random values, does not print them, and leaves existing Secrets alone.
+The standard `FULL_MULTI_DB_PASSWORD` and `FULL_MULTI_DB_ROOT_PASSWORD` inputs
+remain available without `--generate-demo`. Partial existing Secrets are refused.
+
+```bash
 bash scripts/full-multi-global-setup.sh
-bash scripts/full-multi-global-setup.sh --apply --push --bootstrap-mcg \
-  --sm-repo ~/Documents/POCs/ServiceMesh
+bash scripts/full-multi-global-setup.sh --apply --push
 ```
 
-`--bootstrap-mcg` is specifically for the `gp3-csi`/ODF standalone MCG path described in SM v3.5. Omit it when compatible ODF/NooBaa is already healthy. **It does not silently replace an existing storage system.**
-
-The setup script validates GitOps and cluster permissions, initializes the SM environment without overwriting its tenant, adds `full-multi` to monitored mesh namespaces, executes the upstream v3.5 installer and its native Bookinfo/Tempo/Prometheus E2E, checks Argo Rollouts, provisions and isolates four MariaDB StatefulSets/PVCs and readonly grants, deploys the `full-multi` Argo CD Application, establishes a healthy Blue baseline in GitOps, resets retired Rollout history and runs A/B Bookshelf HTTP-to-SQL tests.
-
-For a fresh deployment, the following secrets must already be present in the environment if `db-credentials-a/b` are missing. The helper does not overwrite existing Secrets and never prints these values:
-
-```bash
-export FULL_MULTI_DB_PASSWORD='...'
-export FULL_MULTI_DB_ROOT_PASSWORD='...'
-```
-
-**Security:** Avoid typing real passwords into shared terminals or retaining them in shell history. Use your usual secure secret-injection mechanism. `FULL_MULTI_DB_*` are only needed for first provisioning.
+Setup validates the ambient prerequisites, provisions the four databases and
+credentials if needed, checks their isolation and grants, and establishes a
+Blue baseline. It commits and pushes workflow changes to `multi-ambient`.
+The setup uses existing database Secrets, or the standard credential inputs for
+first provisioning. It never removes the PVCs.
 
 ## Global prepare: any *valid* Rollout lifecycle state
 
@@ -62,7 +63,7 @@ This is a **deliberate reset**, not a status check:
 
 1. Verify the GitOps source, service controller, four isolated PVCs and SELECT-only application privileges.
 2. Abort any in-progress/paused candidate revisions (the application rolls back toward its previously healthy active ReplicaSet). Does not delete data.
-3. Set all six Rollout templates to deterministic Blue/English baseline via `scripts/full-multi-spec.py set`, commit and push only six Rollout YAMLs to `main` when necessary.
+3. Set all six Rollout templates to deterministic Blue/English baseline via `scripts/full-multi-spec.py set`, commit and push only six Rollout YAMLs to `multi-ambient` when necessary.
 4. Observe GitOps revision, and complete **only confirmed Blue** pauses with native Argo Rollouts promotion. Green/YELLOW candidates are never promoted as part of a prepare reset.
 5. Require all six Blue Rollouts Healthy and test the A/B read-only HTTP-to-SQL data paths.
 6. Delete completed AnalysisRuns and non-current ReplicaSets with the existing strict history reset implementation; leave the four StatefulSets/PVCs intact.
@@ -107,9 +108,15 @@ After a deliberate promotion, Blue endpoints may be scaled down; global `prepare
 
 ```bash
 python3 scripts/full-multi-global.py status
-python3 scripts/full-multi-global.py e2e --state blue
-python3 scripts/full-multi-global.py e2e --state paused
+python3 scripts/full-multi-e2e.py --state blue
+python3 scripts/full-multi-e2e.py --state paused
 python3 -m unittest discover -s tests -p test_full_multi_global.py
 ```
 
 There is no automatic GitHub write action through ChatGPT. After reviewing the installed scripts, commit and push them using your own `git` credentials. **Never commit the SM `.env`, generated Tempo secrets, or database credentials.**
+
+The read-only E2E entry point checks the active Gateway and HTTPRoutes, GitOps
+sync, actual configured canary weights, the existing database and rollout
+gates, and the Blue data paths. In the paused state it also checks every
+forced Frontend, Backend and database track. It does not establish Tempo trace
+retrieval or Kiali scrape-target health; verify those separately.

@@ -41,7 +41,7 @@ class BootstrapTests(unittest.TestCase):
 
     def test_protected_migration_accepts_only_legacy_resources_to_prune(self):
         legacy = {'group': 'argoproj.io', 'kind': 'Rollout', 'name': 'mariadb-a',
-                  'namespace': 'full-multi', 'status': 'OutOfSync', 'requiresPruning': True}
+                  'namespace': 'multi-ambient', 'status': 'OutOfSync', 'requiresPruning': True}
         app = {'spec': {'syncPolicy': {'automated': {'prune': False}}},
                'status': {'sync': {'revision': 'new', 'status': 'OutOfSync'},
                           'resources': [legacy]}}
@@ -54,10 +54,21 @@ class BootstrapTests(unittest.TestCase):
         self.assertFalse(mod.sync_snapshot(app, 'new', True)['done'])
 
     def test_deploy_refuses_to_reenable_disabled_pruning(self):
-        app = {'spec': {'syncPolicy': {'automated': {'prune': False}}}}
+        app = {'spec': {'source': {'path': 'full-multi', 'targetRevision': 'multi-ambient',
+                                  'repoURL': 'https://github.com/gstephan76/argo-sm.git'},
+                        'destination': {'server': 'https://kubernetes.default.svc', 'namespace': 'multi-ambient'},
+                        'syncPolicy': {'automated': {'prune': False}}}}
         with patch.object(mod, 'oc_json', return_value=app):
             with self.assertRaisesRegex(mod.BootstrapError, 'pruning disabled'):
-                mod.preflight_deploy('full-multi', 'openshift-gitops', 'full-multi')
+                mod.preflight_deploy('multi-ambient', 'openshift-gitops', 'multi-ambient')
+
+    def test_deploy_refuses_existing_application_with_other_destination(self):
+        app = {'spec': {'source': {'path': 'full-multi', 'targetRevision': 'multi-ambient',
+                                  'repoURL': 'https://github.com/gstephan76/argo-sm.git'},
+                        'destination': {'server': 'https://kubernetes.default.svc', 'namespace': 'full-multi'}}}
+        with patch.object(mod, 'oc_json', return_value=app):
+            with self.assertRaisesRegex(mod.BootstrapError, 'refusing takeover'):
+                mod.preflight_deploy('multi-ambient', 'openshift-gitops', 'multi-ambient')
 
     def test_deploy_refuses_legacy_database_rollout(self):
         def fake_get(*args, **kwargs):
@@ -68,7 +79,7 @@ class BootstrapTests(unittest.TestCase):
             return {'items': [{'metadata': {'name': 'mariadb-a'}}]}
         with patch.object(mod, 'oc_json', side_effect=fake_get):
             with self.assertRaisesRegex(mod.BootstrapError, 'Legacy MariaDB'):
-                mod.preflight_deploy('full-multi', 'openshift-gitops', 'full-multi')
+                mod.preflight_deploy('multi-ambient', 'openshift-gitops', 'multi-ambient')
 
     def test_readiness_requires_all_six_rollouts_and_gateway(self):
         items = []
@@ -87,7 +98,8 @@ class BootstrapTests(unittest.TestCase):
         def fake_get(*args, **kwargs):
             if args[:2] == ('get', 'namespace'):
                 return {'metadata': {'labels': {'istio-discovery': 'enabled',
-                                                'istio-injection': 'enabled'}}}
+                                                'istio.io/dataplane-mode': 'ambient',
+                                                'istio.io/use-waypoint': 'full-multi-waypoint'}}}
             if 'secret' in args:
                 return {'data': {'password': 'placeholder', 'root-password': 'placeholder'}}
             if 'rolloutmanager' in args:

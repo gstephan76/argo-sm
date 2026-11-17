@@ -2,7 +2,7 @@ apiVersion: telemetry.istio.io/v1
 kind: Telemetry
 metadata:
   name: full-multi-tracing
-  namespace: full-multi
+  namespace: multi-ambient
 spec:
   tracing:
     - providers:

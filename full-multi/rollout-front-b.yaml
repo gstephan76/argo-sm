@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: Rollout
 metadata:
   name: front-b
-  namespace: full-multi
+  namespace: multi-ambient
   annotations:
     argocd.argoproj.io/sync-wave: '1'
 spec:
@@ -17,11 +17,10 @@ spec:
   template:
     metadata:
       annotations:
-        demo-rollout-revision: candidate-yellow-20261106T183337Z
+        demo-rollout-revision: baseline-blue
       labels:
         app: front-b
         app.kubernetes.io/name: full-multi-bookshelf
-        sidecar.istio.io/inject: 'true'
     spec:
       volumes:
         - name: release-theme
@@ -41,9 +40,9 @@ spec:
             - name: ROLE
               value: "front"
             - name: MESSAGE_PREFIX
-              value: "Application B - YELLOW"
+              value: "Application B - BLUE"
             - name: BACKEND_API_URL
-              value: "http://backend-b-stable.full-multi.svc.cluster.local:5000/api/books"
+              value: "http://backend-b-stable.multi-ambient.svc.cluster.local:5000/api/books"
           ports:
             - name: http
               containerPort: 3000
@@ -78,11 +77,10 @@ spec:
       stableService: front-b-stable
       canaryService: front-b-canary
       trafficRouting:
-        istio:
-          virtualService:
-            name: front-b-router
-            routes:
-              - secondary
+        plugins:
+          argoproj-labs/gatewayAPI:
+            httpRoute: full-multi-front-router
+            disableInProgressLabel: true
       steps:
         - setWeight: 10
         - analysis:
@@ -90,19 +88,19 @@ spec:
               - templateName: smoke-front-b
             args:
               - name: expected-color
-                value: YELLOW
+                value: BLUE
         - setWeight: 25
         - analysis:
             templates:
               - templateName: smoke-front-b
             args:
               - name: expected-color
-                value: YELLOW
+                value: BLUE
         - setWeight: 50
         - analysis:
             templates:
               - templateName: smoke-front-b
             args:
               - name: expected-color
-                value: YELLOW
+                value: BLUE
         - pause: {}

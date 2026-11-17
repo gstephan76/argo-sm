@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: mariadb-a-green
-  namespace: full-multi
+  namespace: multi-ambient
   annotations:
     argocd.argoproj.io/sync-wave: '-2'
 spec:

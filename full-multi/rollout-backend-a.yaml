@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: Rollout
 metadata:
   name: backend-a
-  namespace: full-multi
+  namespace: multi-ambient
   annotations:
     argocd.argoproj.io/sync-wave: '1'
 spec:
@@ -17,11 +17,10 @@ spec:
   template:
     metadata:
       annotations:
-        demo-rollout-revision: candidate-yellow-20261115T233842Z
+        demo-rollout-revision: baseline-blue
       labels:
         app: backend-a
         app.kubernetes.io/name: full-multi-bookshelf
-        sidecar.istio.io/inject: 'true'
     spec:
       volumes:
         - name: release-theme
@@ -41,9 +40,9 @@ spec:
             - name: ROLE
               value: "backend"
             - name: MESSAGE_PREFIX
-              value: "Application A - YELLOW"
+              value: "Application A - BLUE"
             - name: CRUD_API_URL
-              value: "http://crud-a-blue.full-multi.svc.cluster.local:8080/api/books"
+              value: "http://crud-a-blue.multi-ambient.svc.cluster.local:8080/api/books"
           ports:
             - name: http
               containerPort: 5000
@@ -78,11 +77,10 @@ spec:
       stableService: backend-a-stable
       canaryService: backend-a-canary
       trafficRouting:
-        istio:
-          virtualService:
-            name: backend-a-router
-            routes:
-              - backend-a-default
+        plugins:
+          argoproj-labs/gatewayAPI:
+            httpRoute: backend-a-router
+            disableInProgressLabel: true
       steps:
         - setWeight: 10
         - analysis:
@@ -90,19 +88,19 @@ spec:
               - templateName: smoke-backend-a
             args:
               - name: expected-color
-                value: YELLOW
+                value: BLUE
         - setWeight: 25
         - analysis:
             templates:
               - templateName: smoke-backend-a
             args:
               - name: expected-color
-                value: YELLOW
+                value: BLUE
         - setWeight: 50
         - analysis:
             templates:
               - templateName: smoke-backend-a
             args:
               - name: expected-color
-                value: YELLOW
+                value: BLUE
         - pause: {}

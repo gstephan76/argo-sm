@@ -1,2 +1,6 @@
 
 full-multi/bookshelf/.config/
+
+# Python runtime caches
+__pycache__/
+*.py[cod]

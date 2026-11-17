@@ -1,0 +1,14 @@
+{
+  "folders": [
+    {
+      "path": ".",
+    },
+    {
+      "path": "full-multi",
+    },
+    {
+      "path": "../ServiceMesh",
+    },
+  ],
+  "settings": {},
+}

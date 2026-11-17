@@ -1,0 +1,208 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="1120" viewBox="0 0 2000 1120">
+<defs>
+  <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1f3e68"/><stop offset="100%" stop-color="#3e6698"/></linearGradient>
+  <linearGradient id="hdr" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ea6a6a"/><stop offset="100%" stop-color="#952c31"/></linearGradient>
+  <linearGradient id="stableBand" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#4d95dc"/><stop offset="100%" stop-color="#204870"/></linearGradient>
+  <linearGradient id="canaryBand" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#cb9008"/><stop offset="100%" stop-color="#7a4a00"/></linearGradient>
+  <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#eff5fc"/></marker>
+  <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000" flood-opacity="0.3"/></filter>
+</defs>
+<rect x="0" y="0" width="2000" height="1120" rx="42" fill="url(#bgGrad)"/>
+
+<text x="24" y="46" font-family="Arial, Helvetica, sans-serif" font-size="29" fill="#f6f8fc" text-anchor="start" font-weight="700">full-multi — CURRENT TOPOLOGY</text>
+<text x="500" y="46" font-family="Arial, Helvetica, sans-serif" font-size="19" fill="#dbe4ef" text-anchor="start" font-weight="400">Single VirtualService per rollout · Front/Backend canary · CRUD blue/green · 4 MariaDB StatefulSets</text>
+<rect x="10" y="360" width="115" height="72" rx="12" fill="#bd4746" stroke="#e58c8d" stroke-width="2" filter="url(#shadow)"/>
+<text x="67.5" y="392.0" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#fff" text-anchor="middle" font-weight="700">Gateway</text>
+<polygon points="182,350.0 227.0,395 182,440.0 137.0,395" fill="#20481f" stroke="#8cdf6d" stroke-width="2" filter="url(#shadow)"/>
+<text x="182" y="389.15" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#f6fff4" text-anchor="middle" font-weight="700">Virtual</text>
+<text x="182" y="401.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#f6fff4" text-anchor="middle" font-weight="700">Service</text>
+<rect x="205" y="185" width="180" height="290" rx="4" fill="#43235f" stroke="#c056d4" stroke-width="2" filter="url(#shadow)"/>
+<text x="295" y="215" font-family="Arial, Helvetica, sans-serif" font-size="17" fill="#f8ebff" text-anchor="middle" font-weight="700">Unified Frontend</text>
+<text x="295" y="239" font-family="Arial, Helvetica, sans-serif" font-size="17" fill="#f8ebff" text-anchor="middle" font-weight="700">VirtualService</text>
+<text x="295" y="288" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#d9c7ec" text-anchor="middle" font-weight="400">front-virtualservice.yaml</text>
+<polygon points="295,329.0 354.0,388 295,447.0 236.0,388" fill="#20481f" stroke="#8cdf6d" stroke-width="2" filter="url(#shadow)"/>
+<text x="295" y="380.35" font-family="Arial, Helvetica, sans-serif" font-size="17" fill="#f6fff4" text-anchor="middle" font-weight="700">Routing</text>
+<text x="295" y="396.5" font-family="Arial, Helvetica, sans-serif" font-size="17" fill="#f6fff4" text-anchor="middle" font-weight="700">x-app-target</text>
+<rect x="10" y="455" width="190" height="76" rx="8" fill="#7b5a22" stroke="#c8a669" stroke-width="2" filter="url(#shadow)"/>
+<text x="105" y="478" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#fff" text-anchor="middle" font-weight="700">gateway.yaml</text>
+<text x="105" y="502" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#fff" text-anchor="middle" font-weight="700">OpenShift Route + Istio Gateway</text>
+<line x1="125" y1="395" x2="137" y2="395" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<line x1="227" y1="395" x2="205" y2="395" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<line x1="385" y1="350" x2="428" y2="350" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<line x1="385" y1="405" x2="428" y2="405" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<line x1="398" y1="318" x2="398" y2="665" stroke="#ecf2f8" stroke-width="2" stroke-dasharray="8,7"/>
+<text x="410" y="347" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#eff5fc" text-anchor="start" font-weight="700">A</text>
+<text x="410" y="650" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#eff5fc" text-anchor="start" font-weight="700">B</text>
+<rect x="425" y="76" width="1525" height="350" rx="35" fill="#173d63" fill-opacity="0.56" stroke="#59dbff" stroke-width="2.5"/>
+<text x="1926" y="116" font-family="Arial, Helvetica, sans-serif" font-size="19" fill="#fff" text-anchor="end" font-weight="700">APP A</text>
+<rect x="425" y="450" width="1525" height="350" rx="35" fill="#0d4e50" fill-opacity="0.56" stroke="#25e0bb" stroke-width="2.5"/>
+<text x="1926" y="490" font-family="Arial, Helvetica, sans-serif" font-size="19" fill="#fff" text-anchor="end" font-weight="700">APP B</text>
+<rect x="503" y="96" width="220" height="34" rx="2" fill="url(#hdr)" stroke="#ff9a9a" stroke-width="1" filter="url(#shadow)"/>
+<rect x="870" y="96" width="250" height="34" rx="2" fill="url(#hdr)" stroke="#ff9a9a" stroke-width="1" filter="url(#shadow)"/>
+<rect x="1205" y="96" width="285" height="34" rx="2" fill="url(#hdr)" stroke="#ff9a9a" stroke-width="1" filter="url(#shadow)"/>
+<text x="613" y="119" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#fff" text-anchor="middle" font-weight="700">Rollout Front A</text>
+<text x="995" y="119" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#fff" text-anchor="middle" font-weight="700">Rollout Backend A</text>
+<text x="1347" y="119" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#fff" text-anchor="middle" font-weight="700">Rollout CRUD A · BlueGreen</text>
+<rect x="448" y="142" width="980" height="102" rx="4" fill="#173252" stroke="#5aa5f3" stroke-width="1.6" filter="url(#shadow)"/>
+<rect x="448" y="274" width="980" height="102" rx="4" fill="#11374b" stroke="#d39208" stroke-width="1.6" filter="url(#shadow)"/>
+<rect x="448" y="142" width="980" height="25" rx="4" fill="url(#stableBand)" opacity="0.9"/>
+<rect x="448" y="274" width="980" height="25" rx="4" fill="url(#canaryBand)" opacity="0.95"/>
+<text x="938.0" y="160" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#f8fbff" text-anchor="middle" font-weight="700">Stable</text>
+<text x="938.0" y="292" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#fff5d8" text-anchor="middle" font-weight="700">Canary</text>
+<polygon points="505,199.0 537.0,242 505,285.0 473.0,242" fill="#20481f" stroke="#8cdf6d" stroke-width="2" filter="url(#shadow)"/>
+<text x="505" y="236.15" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#f6fff4" text-anchor="middle" font-weight="700">Virtual</text>
+<text x="505" y="248.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#f6fff4" text-anchor="middle" font-weight="700">Service</text>
+<polygon points="820,199.0 852.0,242 820,285.0 788.0,242" fill="#20481f" stroke="#8cdf6d" stroke-width="2" filter="url(#shadow)"/>
+<text x="820" y="236.15" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#f6fff4" text-anchor="middle" font-weight="700">Virtual</text>
+<text x="820" y="248.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#f6fff4" text-anchor="middle" font-weight="700">Service</text>
+<polygon points="1182,199.0 1214.0,242 1182,285.0 1150.0,242" fill="#20481f" stroke="#8cdf6d" stroke-width="2" filter="url(#shadow)"/>
+<text x="1182" y="236.15" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#f6fff4" text-anchor="middle" font-weight="700">Virtual</text>
+<text x="1182" y="248.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#f6fff4" text-anchor="middle" font-weight="700">Service</text>
+<rect x="570" y="174" width="135" height="58" rx="12" fill="#66a3e5" stroke="#f2ea7a" stroke-width="2" filter="url(#shadow)"/>
+<text x="637.5" y="199.0" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#fff" text-anchor="middle" font-weight="700">Front A</text>
+<text x="637.5" y="222.0" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#fff" text-anchor="middle" font-weight="400">stable</text>
+<rect x="570" y="306" width="135" height="58" rx="12" fill="#66a3e5" stroke="#f2ea7a" stroke-width="2" filter="url(#shadow)"/>
+<text x="637.5" y="331.0" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#fff" text-anchor="middle" font-weight="700">Front A</text>
+<text x="637.5" y="354.0" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#fff" text-anchor="middle" font-weight="400">canary</text>
+<rect x="935" y="174" width="168" height="58" rx="12" fill="#4b3658" stroke="#c592cc" stroke-width="2" filter="url(#shadow)"/>
+<text x="1019.0" y="199.0" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#fff" text-anchor="middle" font-weight="700">Backend A</text>
+<text x="1019.0" y="222.0" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#fff" text-anchor="middle" font-weight="400">stable</text>
+<rect x="935" y="306" width="168" height="58" rx="12" fill="#4b3658" stroke="#c592cc" stroke-width="2" filter="url(#shadow)"/>
+<text x="1019.0" y="331.0" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#fff" text-anchor="middle" font-weight="700">Backend A</text>
+<text x="1019.0" y="354.0" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#fff" text-anchor="middle" font-weight="400">canary</text>
+<rect x="1250" y="174" width="165" height="58" rx="12" fill="#3e6fa6" stroke="#7eb6ff" stroke-width="2" filter="url(#shadow)"/>
+<text x="1332.5" y="199.0" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#fff" text-anchor="middle" font-weight="700">CRUD A</text>
+<text x="1332.5" y="222.0" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#fff" text-anchor="middle" font-weight="400">Active Pod · BLUE</text>
+<rect x="1250" y="306" width="165" height="58" rx="12" fill="#2f7c62" stroke="#7be0a3" stroke-width="2" filter="url(#shadow)"/>
+<text x="1332.5" y="331.0" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#fff" text-anchor="middle" font-weight="700">CRUD A</text>
+<text x="1332.5" y="354.0" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#fff" text-anchor="middle" font-weight="400">Preview Pod · GREEN</text>
+<line x1="425" y1="256" x2="472" y2="256" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<line x1="537" y1="242" x2="570" y2="203" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<line x1="537" y1="242" x2="570" y2="335" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<line x1="705" y1="203" x2="790" y2="203" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<line x1="705" y1="335" x2="790" y2="335" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<line x1="790" y1="203" x2="790" y2="335" stroke="#eff5fc" stroke-width="1.6"/>
+<line x1="852" y1="242" x2="935" y2="203" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<line x1="852" y1="242" x2="935" y2="335" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<line x1="1103" y1="203" x2="1152" y2="203" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<line x1="1103" y1="335" x2="1152" y2="335" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<line x1="1152" y1="203" x2="1152" y2="335" stroke="#eff5fc" stroke-width="1.6"/>
+<line x1="1214" y1="242" x2="1250" y2="203" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<line x1="1214" y1="242" x2="1250" y2="335" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="1495" y="96" width="430" height="258" rx="14" fill="#194658" stroke="#56d2da" stroke-width="1.8" filter="url(#shadow)"/>
+<rect x="1497" y="96" width="426" height="36" rx="4" fill="#145d59" stroke="#28b99e" stroke-width="1" filter="url(#shadow)"/>
+<text x="1710" y="120" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#efffff" text-anchor="middle" font-weight="700">MariaDB A · StatefulSets + PVCs</text>
+<rect x="1525" y="168" width="365" height="74" rx="12" fill="#1b4f84" stroke="#46a2fb" stroke-width="2" filter="url(#shadow)"/>
+<ellipse cx="1547" cy="190" rx="10" ry="4" fill="#a2ebe6"/><rect x="1537" y="190" width="20" height="22" fill="#87d2cd"/><ellipse cx="1547" cy="212" rx="10" ry="4" fill="#78c4bf"/>
+<text x="1570" y="188" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#eef6ff" text-anchor="start" font-weight="700">mariadb-a-blue</text>
+<text x="1570" y="210" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#e2eef8" text-anchor="start" font-weight="400">1 MariaDB Pod · headless Service</text>
+<text x="1570" y="231" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#e2eef8" text-anchor="start" font-weight="400">English · 20 books · dedicated 4 GiB RWO PVC</text>
+<rect x="1525" y="266" width="365" height="74" rx="12" fill="#1c6851" stroke="#57d88f" stroke-width="2" filter="url(#shadow)"/>
+<ellipse cx="1547" cy="288" rx="10" ry="4" fill="#a2ebe6"/><rect x="1537" y="288" width="20" height="22" fill="#87d2cd"/><ellipse cx="1547" cy="310" rx="10" ry="4" fill="#78c4bf"/>
+<text x="1570" y="286" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#eef6ff" text-anchor="start" font-weight="700">mariadb-a-green</text>
+<text x="1570" y="308" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#e2eef8" text-anchor="start" font-weight="400">1 MariaDB Pod · headless Service</text>
+<text x="1570" y="329" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#e2eef8" text-anchor="start" font-weight="400">Portuguese · 20 books · dedicated 4 GiB RWO PVC</text>
+<text x="1485" y="209" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#d8e3ef" text-anchor="end" font-weight="700">TCP · 3306</text>
+<text x="1485" y="341" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#d8e3ef" text-anchor="end" font-weight="700">TCP · 3306</text>
+<line x1="1415" y1="203" x2="1525" y2="205" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<line x1="1415" y1="335" x2="1525" y2="303" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="1115" y="391" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#dce8f5" text-anchor="middle" font-weight="400">APP A · Front/Backend stable or canary and CRUD BLUE or GREEN are selected independently</text>
+<rect x="503" y="470" width="220" height="34" rx="2" fill="url(#hdr)" stroke="#ff9a9a" stroke-width="1" filter="url(#shadow)"/>
+<rect x="870" y="470" width="250" height="34" rx="2" fill="url(#hdr)" stroke="#ff9a9a" stroke-width="1" filter="url(#shadow)"/>
+<rect x="1205" y="470" width="285" height="34" rx="2" fill="url(#hdr)" stroke="#ff9a9a" stroke-width="1" filter="url(#shadow)"/>
+<text x="613" y="493" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#fff" text-anchor="middle" font-weight="700">Rollout Front B</text>
+<text x="995" y="493" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#fff" text-anchor="middle" font-weight="700">Rollout Backend B</text>
+<text x="1347" y="493" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#fff" text-anchor="middle" font-weight="700">Rollout CRUD B · BlueGreen</text>
+<rect x="448" y="516" width="980" height="102" rx="4" fill="#173252" stroke="#5aa5f3" stroke-width="1.6" filter="url(#shadow)"/>
+<rect x="448" y="648" width="980" height="102" rx="4" fill="#11374b" stroke="#d39208" stroke-width="1.6" filter="url(#shadow)"/>
+<rect x="448" y="516" width="980" height="25" rx="4" fill="url(#stableBand)" opacity="0.9"/>
+<rect x="448" y="648" width="980" height="25" rx="4" fill="url(#canaryBand)" opacity="0.95"/>
+<text x="938.0" y="534" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#f8fbff" text-anchor="middle" font-weight="700">Stable</text>
+<text x="938.0" y="666" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#fff5d8" text-anchor="middle" font-weight="700">Canary</text>
+<polygon points="505,573.0 537.0,616 505,659.0 473.0,616" fill="#20481f" stroke="#8cdf6d" stroke-width="2" filter="url(#shadow)"/>
+<text x="505" y="610.15" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#f6fff4" text-anchor="middle" font-weight="700">Virtual</text>
+<text x="505" y="622.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#f6fff4" text-anchor="middle" font-weight="700">Service</text>
+<polygon points="820,573.0 852.0,616 820,659.0 788.0,616" fill="#20481f" stroke="#8cdf6d" stroke-width="2" filter="url(#shadow)"/>
+<text x="820" y="610.15" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#f6fff4" text-anchor="middle" font-weight="700">Virtual</text>
+<text x="820" y="622.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#f6fff4" text-anchor="middle" font-weight="700">Service</text>
+<polygon points="1182,573.0 1214.0,616 1182,659.0 1150.0,616" fill="#20481f" stroke="#8cdf6d" stroke-width="2" filter="url(#shadow)"/>
+<text x="1182" y="610.15" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#f6fff4" text-anchor="middle" font-weight="700">Virtual</text>
+<text x="1182" y="622.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#f6fff4" text-anchor="middle" font-weight="700">Service</text>
+<rect x="570" y="548" width="135" height="58" rx="12" fill="#66a3e5" stroke="#f2ea7a" stroke-width="2" filter="url(#shadow)"/>
+<text x="637.5" y="573.0" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#fff" text-anchor="middle" font-weight="700">Front B</text>
+<text x="637.5" y="596.0" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#fff" text-anchor="middle" font-weight="400">stable</text>
+<rect x="570" y="680" width="135" height="58" rx="12" fill="#66a3e5" stroke="#f2ea7a" stroke-width="2" filter="url(#shadow)"/>
+<text x="637.5" y="705.0" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#fff" text-anchor="middle" font-weight="700">Front B</text>
+<text x="637.5" y="728.0" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#fff" text-anchor="middle" font-weight="400">canary</text>
+<rect x="935" y="548" width="168" height="58" rx="12" fill="#4b3658" stroke="#c592cc" stroke-width="2" filter="url(#shadow)"/>
+<text x="1019.0" y="573.0" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#fff" text-anchor="middle" font-weight="700">Backend B</text>
+<text x="1019.0" y="596.0" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#fff" text-anchor="middle" font-weight="400">stable</text>
+<rect x="935" y="680" width="168" height="58" rx="12" fill="#4b3658" stroke="#c592cc" stroke-width="2" filter="url(#shadow)"/>
+<text x="1019.0" y="705.0" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#fff" text-anchor="middle" font-weight="700">Backend B</text>
+<text x="1019.0" y="728.0" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#fff" text-anchor="middle" font-weight="400">canary</text>
+<rect x="1250" y="548" width="165" height="58" rx="12" fill="#3e6fa6" stroke="#7eb6ff" stroke-width="2" filter="url(#shadow)"/>
+<text x="1332.5" y="573.0" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#fff" text-anchor="middle" font-weight="700">CRUD B</text>
+<text x="1332.5" y="596.0" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#fff" text-anchor="middle" font-weight="400">Active Pod · BLUE</text>
+<rect x="1250" y="680" width="165" height="58" rx="12" fill="#2f7c62" stroke="#7be0a3" stroke-width="2" filter="url(#shadow)"/>
+<text x="1332.5" y="705.0" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#fff" text-anchor="middle" font-weight="700">CRUD B</text>
+<text x="1332.5" y="728.0" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#fff" text-anchor="middle" font-weight="400">Preview Pod · GREEN</text>
+<line x1="425" y1="630" x2="472" y2="630" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<line x1="537" y1="616" x2="570" y2="577" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<line x1="537" y1="616" x2="570" y2="709" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<line x1="705" y1="577" x2="790" y2="577" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<line x1="705" y1="709" x2="790" y2="709" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<line x1="790" y1="577" x2="790" y2="709" stroke="#eff5fc" stroke-width="1.6"/>
+<line x1="852" y1="616" x2="935" y2="577" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<line x1="852" y1="616" x2="935" y2="709" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<line x1="1103" y1="577" x2="1152" y2="577" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<line x1="1103" y1="709" x2="1152" y2="709" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<line x1="1152" y1="577" x2="1152" y2="709" stroke="#eff5fc" stroke-width="1.6"/>
+<line x1="1214" y1="616" x2="1250" y2="577" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<line x1="1214" y1="616" x2="1250" y2="709" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="1495" y="470" width="430" height="258" rx="14" fill="#194658" stroke="#56d2da" stroke-width="1.8" filter="url(#shadow)"/>
+<rect x="1497" y="470" width="426" height="36" rx="4" fill="#145d59" stroke="#28b99e" stroke-width="1" filter="url(#shadow)"/>
+<text x="1710" y="494" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#efffff" text-anchor="middle" font-weight="700">MariaDB B · StatefulSets + PVCs</text>
+<rect x="1525" y="542" width="365" height="74" rx="12" fill="#1b4f84" stroke="#46a2fb" stroke-width="2" filter="url(#shadow)"/>
+<ellipse cx="1547" cy="564" rx="10" ry="4" fill="#a2ebe6"/><rect x="1537" y="564" width="20" height="22" fill="#87d2cd"/><ellipse cx="1547" cy="586" rx="10" ry="4" fill="#78c4bf"/>
+<text x="1570" y="562" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#eef6ff" text-anchor="start" font-weight="700">mariadb-b-blue</text>
+<text x="1570" y="584" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#e2eef8" text-anchor="start" font-weight="400">1 MariaDB Pod · headless Service</text>
+<text x="1570" y="605" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#e2eef8" text-anchor="start" font-weight="400">English · 20 books · dedicated 4 GiB RWO PVC</text>
+<rect x="1525" y="640" width="365" height="74" rx="12" fill="#1c6851" stroke="#57d88f" stroke-width="2" filter="url(#shadow)"/>
+<ellipse cx="1547" cy="662" rx="10" ry="4" fill="#a2ebe6"/><rect x="1537" y="662" width="20" height="22" fill="#87d2cd"/><ellipse cx="1547" cy="684" rx="10" ry="4" fill="#78c4bf"/>
+<text x="1570" y="660" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#eef6ff" text-anchor="start" font-weight="700">mariadb-b-green</text>
+<text x="1570" y="682" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#e2eef8" text-anchor="start" font-weight="400">1 MariaDB Pod · headless Service</text>
+<text x="1570" y="703" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#e2eef8" text-anchor="start" font-weight="400">Portuguese · 20 books · dedicated 4 GiB RWO PVC</text>
+<text x="1485" y="583" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#d8e3ef" text-anchor="end" font-weight="700">TCP · 3306</text>
+<text x="1485" y="715" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#d8e3ef" text-anchor="end" font-weight="700">TCP · 3306</text>
+<line x1="1415" y1="577" x2="1525" y2="579" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<line x1="1415" y1="709" x2="1525" y2="677" stroke="#eff5fc" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="1115" y="765" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#dce8f5" text-anchor="middle" font-weight="400">APP B · Front/Backend stable or canary and CRUD BLUE or GREEN are selected independently</text>
+<rect x="14" y="830" width="450" height="210" rx="8" fill="#4c325b" stroke="#ffffff00" stroke-width="0" filter="url(#shadow)"/>
+<rect x="14" y="830" width="450" height="210" rx="8" fill="#4a2644" fill-opacity="0.72" stroke="#ff5f9f" stroke-width="2"/>
+<text x="28" y="856" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#fbeef5" text-anchor="start" font-weight="700">1. Unified Frontend VirtualService</text>
+<text x="28" y="886" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#f0dce7" text-anchor="start" font-weight="400">front-virtualservice.yaml</text>
+<text x="28" y="916" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#f0dce7" text-anchor="start" font-weight="400">Single root for APP A and APP B</text>
+<text x="28" y="946" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#f0dce7" text-anchor="start" font-weight="400">x-app-target: b → B; otherwise A</text>
+<text x="28" y="976" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#f0dce7" text-anchor="start" font-weight="400">Delegates to front-a / front-b routers</text>
+<rect x="474" y="830" width="470" height="210" rx="8" fill="#4c325b" stroke="#ffffff00" stroke-width="0" filter="url(#shadow)"/>
+<rect x="474" y="830" width="470" height="210" rx="8" fill="#4a2644" fill-opacity="0.72" stroke="#f25ea0" stroke-width="2"/>
+<text x="488" y="856" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#fbeef5" text-anchor="start" font-weight="700">2. Per-application Frontend Routers</text>
+<text x="488" y="886" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#f0dce7" text-anchor="start" font-weight="400">front-a-router.yaml / front-b-router.yaml</text>
+<text x="488" y="916" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#f0dce7" text-anchor="start" font-weight="400">One VirtualService per app (stable/canary split)</text>
+<text x="488" y="946" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#f0dce7" text-anchor="start" font-weight="400">x-front-track selects stable or canary</text>
+<rect x="954" y="830" width="470" height="210" rx="8" fill="#4c325b" stroke="#ffffff00" stroke-width="0" filter="url(#shadow)"/>
+<rect x="954" y="830" width="470" height="210" rx="8" fill="#4a2644" fill-opacity="0.72" stroke="#ff865f" stroke-width="2"/>
+<text x="968" y="856" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#fbeef5" text-anchor="start" font-weight="700">3. Per-application Backend Routers</text>
+<text x="968" y="886" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#f0dce7" text-anchor="start" font-weight="400">backend-a-virtualservice.yaml</text>
+<text x="968" y="916" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#f0dce7" text-anchor="start" font-weight="400">backend-b-virtualservice.yaml</text>
+<text x="968" y="946" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#f0dce7" text-anchor="start" font-weight="400">One VirtualService per app (stable/canary split)</text>
+<text x="968" y="976" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#f0dce7" text-anchor="start" font-weight="400">x-backend-track routes stable/canary</text>
+<rect x="1434" y="830" width="552" height="210" rx="8" fill="#4c325b" stroke="#ffffff00" stroke-width="0" filter="url(#shadow)"/>
+<rect x="1434" y="830" width="552" height="210" rx="8" fill="#4a2644" fill-opacity="0.72" stroke="#ff865f" stroke-width="2"/>
+<text x="1448" y="856" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#fbeef5" text-anchor="start" font-weight="700">4. Per-application CRUD Routers</text>
+<text x="1448" y="886" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#f0dce7" text-anchor="start" font-weight="400">crud-a-virtualservice.yaml</text>
+<text x="1448" y="916" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#f0dce7" text-anchor="start" font-weight="400">crud-b-virtualservice.yaml</text>
+<text x="1448" y="946" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#f0dce7" text-anchor="start" font-weight="400">One VirtualService per app (BLUE/GREEN split)</text>
+<text x="1448" y="976" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#f0dce7" text-anchor="start" font-weight="400">x-db-track selects BLUE active or GREEN preview</text>
+<text x="1000.0" y="1102" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#eff6ff" text-anchor="middle" font-weight="700">namespace full-multi · 7 VirtualServices · 6 Argo Rollouts · 4 isolated MariaDB StatefulSets + PVCs · no shared CRUD pods</text>
+</svg>

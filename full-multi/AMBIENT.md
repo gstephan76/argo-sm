@@ -39,6 +39,9 @@ loaded; configuration and RBAC alone do not prove that it is running. See the
    paths are healthy. Promote candidates only after confirming the intended
    revision. Do not infer working routing from GitOps Synced alone.
 
+For the request path and an explanation of Kiali Service/workload nodes and
+ambient HTTP/TCP edges, see [OBSERVABILITY.md](OBSERVABILITY.md).
+
 Local tests validate manifest structure and routing selection. They do not
 establish live Gateway reconciliation, plugin operation, observability or
 end-to-end traffic on the cluster.

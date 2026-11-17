@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1010" viewBox="0 0 1600 1010" role="img" aria-labelledby="title desc">
+  <title id="title">Multi-ambient service mesh architecture</title>
+  <desc id="desc">A logical request path from client through an OpenShift Route and Istio ingress gateway to frontend, backend, CRUD and independent MariaDB databases, with an ambient waypoint and ztunnel, GitOps and Rollouts control, and observability.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0c1425"/><stop offset="1" stop-color="#101f31"/></linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#79d6ef"/></marker>
+    <marker id="arrowControl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#c3a6fb"/></marker>
+    <style>
+      text {font-family:Inter,Segoe UI,Arial,sans-serif; fill:#edf5ff}
+      .title{font-size:34px;font-weight:700;letter-spacing:-.5px}.subtitle{font-size:17px;fill:#9bb0c8}
+      .section{font-size:14px;font-weight:700;letter-spacing:1.5px;fill:#a9bbd0}.label{font-size:18px;font-weight:700}.small{font-size:14px;fill:#b8c9db}.tiny{font-size:12.5px;fill:#a4bad1}.mono{font-family:Consolas,monospace;font-size:13px;fill:#d3e7f5}
+      .frame{fill:#102238;stroke:#35536b;stroke-width:1.5}.card{fill:#182d43;stroke:#42647b;stroke-width:1.4}.mesh{fill:#102b39;stroke:#348ba0;stroke-width:1.5}.purple{fill:#29253f;stroke:#76689a;stroke-width:1.4}.obs{fill:#202e34;stroke:#648777;stroke-width:1.4}
+      .flow{fill:none;stroke:#79d6ef;stroke-width:2.5;marker-end:url(#arrow)}.control{fill:none;stroke:#c3a6fb;stroke-width:2;stroke-dasharray:7 7;marker-end:url(#arrowControl)}.line{fill:none;stroke:#55879a;stroke-width:1.5;stroke-dasharray:5 6}
+    </style>
+  </defs>
+  <rect width="1600" height="1010" rx="22" fill="url(#background)"/>
+  <text x="52" y="64" class="title">Multi-ambient service mesh</text>
+  <text x="54" y="94" class="subtitle">Logical request path, ambient proxies and the control services that configure them</text>
+
+  <rect x="48" y="122" width="1504" height="124" rx="15" class="frame"/>
+  <text x="70" y="149" class="section">SHARED CLUSTER PLATFORM</text>
+  <rect x="70" y="163" width="435" height="60" rx="9" class="mesh"/>
+  <text x="88" y="187" class="label">Istio control plane + ambient CNI</text><text x="88" y="208" class="small">Istio/default · discovery · node enrollment</text>
+  <rect x="525" y="163" width="435" height="60" rx="9" class="mesh"/>
+  <text x="543" y="187" class="label">Ztunnel on application nodes</text><text x="543" y="208" class="small">L4 connectivity and mesh security between workloads</text>
+  <rect x="980" y="163" width="548" height="60" rx="9" class="obs"/>
+  <text x="998" y="187" class="label">OpenTelemetry · Tempo · Kiali</text><text x="998" y="208" class="small">OTLP traces and mesh metrics feed observability</text>
+
+  <rect x="245" y="271" width="1307" height="448" rx="15" class="frame"/>
+  <text x="267" y="302" class="section">NAMESPACE  /  multi-ambient</text>
+  <text x="1527" y="302" text-anchor="end" class="tiny">ambient enrollment + service waypoint labels</text>
+
+  <rect x="70" y="350" width="158" height="150" rx="11" class="card"/>
+  <text x="88" y="382" class="label">External client</text><text x="88" y="408" class="small">HTTPS request</text><text x="88" y="430" class="tiny">headers select app</text><text x="88" y="450" class="tiny">and release tracks</text>
+  <rect x="257" y="350" width="184" height="150" rx="11" class="card"/>
+  <text x="275" y="382" class="label">OpenShift Route</text><text x="275" y="406" class="mono">multi-ambient</text><text x="275" y="432" class="small">TLS edge termination</text><text x="275" y="453" class="small">→ gateway Service</text>
+  <rect x="470" y="350" width="195" height="150" rx="11" class="card"/>
+  <text x="488" y="382" class="label">Istio ingress</text><text x="488" y="406" class="mono">full-multi-gateway</text><text x="488" y="432" class="small">Gateway API / HTTP</text><text x="488" y="453" class="small">front HTTPRoute</text>
+  <rect x="694" y="350" width="181" height="150" rx="11" class="card"/>
+  <text x="712" y="382" class="label">Frontend A / B</text><text x="712" y="406" class="small">stable or canary</text><text x="712" y="429" class="tiny">x-app-target</text><text x="712" y="449" class="tiny">x-front-track</text>
+  <rect x="904" y="350" width="181" height="150" rx="11" class="card"/>
+  <text x="922" y="382" class="label">Backend A / B</text><text x="922" y="406" class="small">stable or canary</text><text x="922" y="429" class="tiny">x-backend-track</text><text x="922" y="449" class="tiny">service HTTPRoute</text>
+  <rect x="1114" y="350" width="181" height="150" rx="11" class="card"/>
+  <text x="1132" y="382" class="label">CRUD A / B</text><text x="1132" y="406" class="small">blue or green</text><text x="1132" y="429" class="tiny">x-db-track</text><text x="1132" y="449" class="tiny">service HTTPRoute</text>
+  <rect x="1324" y="350" width="204" height="150" rx="11" class="card"/>
+  <text x="1342" y="382" class="label">MariaDB</text><text x="1342" y="406" class="small">A blue / A green</text><text x="1342" y="428" class="small">B blue / B green</text><text x="1342" y="450" class="tiny">4 StatefulSets + 4 PVCs</text>
+  <path d="M 228 425 H 250" class="flow"/><path d="M 441 425 H 463" class="flow"/><path d="M 665 425 H 687" class="flow"/><path d="M 875 425 H 897" class="flow"/><path d="M 1085 425 H 1107" class="flow"/><path d="M 1295 425 H 1317" class="flow"/>
+  <text x="1306" y="521" text-anchor="end" class="tiny">HTTP</text><text x="1328" y="521" class="tiny">TCP / 3306</text>
+
+  <rect x="260" y="571" width="560" height="112" rx="11" class="mesh"/>
+  <text x="280" y="603" class="label">Service waypoint  /  full-multi-waypoint</text>
+  <text x="280" y="629" class="small">GatewayClass istio-waypoint · service-bound L7 routing</text>
+  <text x="280" y="652" class="tiny">Backend and CRUD HTTPRoutes select named Services by request headers.</text>
+  <rect x="845" y="571" width="683" height="112" rx="11" class="mesh"/>
+  <text x="865" y="603" class="label">Ambient data plane</text>
+  <text x="865" y="629" class="small">Namespace labels enroll workloads; ztunnel provides node-level L4 transport.</text>
+  <text x="865" y="652" class="tiny">The waypoint is a shared proxy for Services, not another application tier.</text>
+  <path d="M 540 571 V 545 H 995 V 507" class="line"/><path d="M 995 545 H 1204 V 507" class="line"/>
+
+  <rect x="48" y="746" width="1504" height="203" rx="15" class="frame"/>
+  <text x="70" y="778" class="section">DECLARATIVE CONTROL</text>
+  <rect x="70" y="799" width="440" height="98" rx="11" class="purple"/>
+  <text x="90" y="830" class="label">Argo CD Application / multi-ambient</text>
+  <text x="90" y="855" class="small">branch: multi-ambient · path: full-multi</text>
+  <text x="90" y="878" class="tiny">syncs namespace, routes, workloads and telemetry</text>
+  <rect x="580" y="799" width="440" height="98" rx="11" class="purple"/>
+  <text x="600" y="830" class="label">Cluster-scoped Argo Rollouts</text>
+  <text x="600" y="855" class="small">Gateway API traffic plugin v0.17.0</text>
+  <text x="600" y="878" class="tiny">updates weighted HTTPRoute backends and selectors</text>
+  <rect x="1090" y="799" width="438" height="98" rx="11" class="obs"/>
+  <text x="1110" y="830" class="label">Metrics and traces</text>
+  <text x="1110" y="855" class="small">Waypoint HTTP + ztunnel TCP → Kiali</text>
+  <text x="1110" y="878" class="tiny">Istio otel-tracing → Collector → Tempo</text>
+  <path d="M 510 848 H 570" class="control"/><text x="540" y="832" text-anchor="middle" class="tiny">Rollouts</text><path d="M 800 799 V 735" class="control"/>
+  <text x="70" y="928" class="tiny">Solid arrows: logical request path · Dashed arrows: control/configuration · Lines to waypoint: routing responsibility</text>
+</svg>

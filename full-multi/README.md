@@ -6,6 +6,86 @@ StatefulSet, Service, PVC or SQL connection. Frontend/Backend have independent
 Argo Rollouts Canary strategies, while CRUD-A/B have native Argo Rollouts
 BlueGreen strategies.
 
+## How ambient mode is configured
+
+The ambient version reuses the cluster's Service Mesh and observability stack.
+The `multi-ambient` Argo CD Application tracks the `multi-ambient` branch and
+renders the `full-multi` directory into the `multi-ambient` namespace. The
+repository directory and some existing resources retain their `full-multi`
+names; the OpenShift Route and destination namespace are both `multi-ambient`.
+
+![Multi-ambient service mesh architecture](ambient-architecture.svg)
+
+The diagram shows the logical request path. The waypoint is shared by enrolled
+Services; it is not another application tier. The repository configures the
+application boundary as follows:
+
+1. **Enroll the namespace.** [namespace.yaml](namespace.yaml) sets
+   `istio.io/dataplane-mode: ambient`, enables mesh discovery, selects
+   `full-multi-waypoint`, and grants management to the `openshift-gitops`
+   Argo CD instance. Application Pods do not request sidecar injection.
+   Ztunnel on each application node provides the ambient L4 data plane.
+2. **Create ingress and L7 routing.** The OpenShift
+   [Route](route.yaml) terminates TLS at the edge and forwards to the
+   Service generated for [Gateway/full-multi-gateway](gateway.yaml).
+   [front-httproute.yaml](front-httproute.yaml) selects application A or B
+   and the Frontend stable/canary Service from the request headers. The
+   [service waypoint](waypoint.yaml), using `istio-waypoint` and HBONE,
+   supports the Service-attached Backend and CRUD HTTPRoutes. Those routes
+   select the corresponding Backend and CRUD Services using
+   `x-backend-track` and `x-db-track`. Without a CRUD track header, the
+   CRUD route selects the active Service.
+3. **Keep traffic control with Argo Rollouts.** A cluster-scoped
+   RolloutManager uses the `argoproj-labs/gatewayAPI` plugin at `v0.17.0`.
+   The Frontend and Backend canaries reference their HTTPRoutes and let the
+   plugin update stable/canary weights. CRUD uses a BlueGreen strategy with
+   explicit promotion. The Argo CD Application ignores the
+   Rollouts-managed Service hash selectors and HTTPRoute weights, while
+   retaining the rest of each resource in GitOps. Namespace-scoped roles
+   give the Rollouts controller access to Services and HTTPRoutes and the
+   GitOps controller access to Gateways.
+4. **Reuse tracing and metrics.** [telemetry.yaml](telemetry.yaml) selects
+   the existing `otel-tracing` provider. The gateway and waypoint provide
+   HTTP telemetry, while ztunnel provides TCP telemetry. Kiali can display
+   both; the OpenTelemetry Collector exports traces to Tempo. See
+   [OBSERVABILITY.md](OBSERVABILITY.md) for the Kiali graph and trace checks.
+
+On the cluster used for this deployment, `Istio/default` was verified with the
+`ambient` profile, discovery selector `istio-discovery=enabled`, tracing
+provider `otel-tracing`, and `ENABLE_INGRESS_WAYPOINT_ROUTING=true`. The
+ambient CNI and ztunnel are installed in `istio-cni` and `ztunnel`,
+respectively. These are shared platform settings; the application manifests do
+not install or change them. OVN-Kubernetes uses `routingViaHost: true` so
+ambient workload probes can reach Pods through the host. Changing that setting
+is cluster-wide and can disrupt traffic during reconciliation.
+
+The idempotent scripts used for the prerequisites and initial deployment are:
+
+```bash
+# Read-only inspection first; --apply changes cluster-wide OVN routing.
+python3 scripts/full-multi-ambient-network.py --check
+python3 scripts/full-multi-ambient-network.py --apply
+
+# Installs or checks GitOps, Rollouts, the console plugin and namespace RBAC.
+python3 scripts/full-multi-install-prereqs.py --check
+python3 scripts/full-multi-install-prereqs.py --apply
+
+# Optional disposable credentials for a fresh demo namespace.
+bash scripts/full-multi-secrets.sh --generate-demo
+
+# Inspect the setup plan, then provision the Blue baseline if intended.
+bash scripts/full-multi-global-setup.sh
+bash scripts/full-multi-global-setup.sh --apply --push
+```
+
+The setup command can change cluster resources, commit and push Blue templates,
+and reset rollout history. Do not run it to preserve a paused demonstration.
+The scripts preserve existing Secrets and PVCs, and refuse conflicting
+prerequisite resources. See [GLOBAL-WORKFLOWS.md](GLOBAL-WORKFLOWS.md) for
+preconditions, recovery and verification, and [AMBIENT.md](AMBIENT.md) for
+the deployment boundaries. GitOps sync and local tests alone do not prove
+working traffic, telemetry collection or trace retrieval.
+
 ## Contract
 
 | Application | HTTP Rollouts | CRUD Rollout | SQL database (own 4Gi RWO PVC) |

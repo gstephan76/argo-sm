@@ -13,6 +13,19 @@ and the local `oc`, Git, Python, Bash, `jq`, `curl`, and `skopeo` tools. The
 ambient HTTPRoutes also require the Gateway API traffic plugin on that same
 controller. Existing mesh and observability services are reused.
 
+For OVN-Kubernetes ambient probes, the cluster must use local gateway mode.
+Inspect and, when the cluster-wide routing change is authorized, enable it with:
+
+```bash
+python3 scripts/full-multi-ambient-network.py --check
+python3 scripts/full-multi-ambient-network.py --apply
+```
+
+The apply command changes `routingViaHost` for the whole cluster, then waits
+for OVN's effective local mode and daemonsets to reconcile. Network traffic may
+be disrupted during the transition. The mode is not changed by the regular
+GitOps installer or application setup.
+
 Install the missing GitOps prerequisites separately, using the same script
 for an initial installation and after an interruption:
 
@@ -24,7 +37,8 @@ python3 scripts/full-multi-install-prereqs.py --apply
 The installer uses the approved `latest` GitOps Operator channel, enables the
 operator's OpenShift `gitops-plugin` console UI, reuses or creates a single
 cluster-scoped RolloutManager, configures the Gateway API plugin, and grants
-its service account only the required permissions in `multi-ambient`. It
+its service account only the required permissions in `multi-ambient`. It also
+grants the GitOps application controller namespace-scoped Gateway access. It
 preserves unrelated console plugins and traffic plugins, and refuses conflicting
 existing resources. It does not install Service Mesh, OpenTelemetry or Tempo.
 After installation, verify the plugin has loaded in the controller logs; an
@@ -120,3 +134,10 @@ sync, actual configured canary weights, the existing database and rollout
 gates, and the Blue data paths. In the paused state it also checks every
 forced Frontend, Backend and database track. It does not establish Tempo trace
 retrieval or Kiali scrape-target health; verify those separately.
+
+If a sync is blocked specifically by the two known Gateway create-permission
+failures, rerun the prerequisite installer to correct permissions. The guarded
+`full-multi-retry-gateway-sync.py` can then terminate and resubmit only the
+recognized failed operation for the exact revision; run its `--revision` form
+first as a read-only check and use `--apply` for each required recovery stage.
+It refuses unrelated failures or revisions.

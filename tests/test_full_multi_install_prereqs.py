@@ -59,6 +59,18 @@ class PrerequisiteTests(unittest.TestCase):
                 mod.ensure_namespace()
             update.assert_not_called()
 
+    def test_gitops_gateway_role_is_namespace_scoped_and_idempotent(self):
+        controller = {'spec': {'template': {'spec': {'serviceAccountName': 'gitops-controller'}}}}
+        with patch.object(mod, 'get', side_effect=[controller, None, None]), patch.object(mod, 'create') as create:
+            mod.ensure_gitops_gateway_rbac()
+        role, binding = (call.args[0] for call in create.call_args_list)
+        self.assertEqual(role['metadata']['namespace'], 'multi-ambient')
+        self.assertEqual(role['rules'][0]['resources'], ['gateways'])
+        self.assertEqual(binding['subjects'][0]['name'], 'gitops-controller')
+        with patch.object(mod, 'get', side_effect=[controller, role, binding]), patch.object(mod, 'create') as create:
+            mod.ensure_gitops_gateway_rbac()
+        create.assert_not_called()
+
     def test_existing_rbac_conflict_is_not_overwritten(self):
         with patch.object(mod, 'get', return_value={'rules': [{'verbs': ['*']}]}), patch.object(mod, 'create') as create:
             with self.assertRaises(mod.Failure):

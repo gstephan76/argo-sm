@@ -205,6 +205,30 @@ def ensure_rbac(owner_ns, account):
             print(f'OK {obj["kind"]}/{RBAC_NAME} already configured', flush=True)
 
 
+def ensure_gitops_gateway_rbac():
+    controller = get('statefulset', 'openshift-gitops-application-controller', ARGO_NS)
+    account = (((controller or {}).get('spec') or {}).get('template') or {}).get('spec', {}).get('serviceAccountName')
+    if not account:
+        raise Failure('Cannot identify the GitOps application controller service account')
+    name = 'multi-ambient-gitops-gateway'
+    role = {'apiVersion': 'rbac.authorization.k8s.io/v1', 'kind': 'Role',
+            'metadata': {'name': name, 'namespace': APP_NS},
+            'rules': [{'apiGroups': ['gateway.networking.k8s.io'], 'resources': ['gateways'],
+                       'verbs': ['get', 'list', 'watch', 'create', 'update', 'patch', 'delete']}]}
+    binding = {'apiVersion': 'rbac.authorization.k8s.io/v1', 'kind': 'RoleBinding',
+               'metadata': {'name': name, 'namespace': APP_NS},
+               'roleRef': {'apiGroup': 'rbac.authorization.k8s.io', 'kind': 'Role', 'name': name},
+               'subjects': [{'kind': 'ServiceAccount', 'name': account, 'namespace': ARGO_NS}]}
+    for obj, fields in [(role, ('rules',)), (binding, ('roleRef', 'subjects'))]:
+        live = get(obj['kind'].lower(), name, APP_NS)
+        if live is None:
+            create(obj)
+        elif any(live.get(k) != obj[k] for k in fields):
+            raise Failure(f'Existing {obj["kind"]}/{name} differs; inspect before proceeding')
+        else:
+            print(f'OK {obj["kind"]}/{name} already configured', flush=True)
+
+
 def check():
     for kind, name, namespace in [('namespace', OP_NS, None), ('namespace', ARGO_NS, None),
                                   ('namespace', APP_NS, None), ('crd', 'applications.argoproj.io', None),
@@ -231,6 +255,7 @@ def main():
             ensure_console()
             owner_ns, account = ensure_manager()
             ensure_rbac(owner_ns, account)
+            ensure_gitops_gateway_rbac()
             print('PASS prerequisite configuration requested. Verify plugin loading, mesh readiness and server-side admission before deploying.')
         return 0
     except (Failure, ValueError, KeyError) as exc:

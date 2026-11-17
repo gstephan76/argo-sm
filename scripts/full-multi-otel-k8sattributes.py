@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Fail-closed opt-in k8s.namespace.name enrichment for full-multi traces.
+"""Fail-closed opt-in k8s.namespace.name enrichment for multi-ambient traces.
 
-No full-multi workload, VirtualService, Argo CD Application, or TempoStack is
+No multi-ambient workload, routing resource, Argo CD Application, or TempoStack is
 modified. The shared istio-system/otel Collector CR is patched only on --apply.
 All writes are explicit; --check and --verify are read-only.
 """
@@ -13,7 +13,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parent.parent
 RBAC_FILE = ROOT / 'platform-monitoring' / 'otel-full-multi-rbac.yaml'
-NAMESPACE = 'full-multi'
+NAMESPACE = 'multi-ambient'
 COLLECTOR_NS = 'istio-system'
 COLLECTOR_NAME = 'otel'
 SERVICE_ACCOUNT = 'otel-collector'
@@ -81,7 +81,7 @@ def check_rbac():
     binding = read_resource('rolebinding', 'otel-full-multi-reader', NAMESPACE)
     for kind, item in [('Role', role), ('RoleBinding', binding)]:
         if item and item.get('metadata', {}).get('labels', {}).get('app.kubernetes.io/managed-by') != LABEL_VALUE:
-            raise RuntimeError('%s/full-multi/otel-full-multi-reader exists but is not managed by this patch' % kind)
+            raise RuntimeError('%s/multi-ambient/otel-full-multi-reader exists but is not managed by this patch' % kind)
     if role and role.get('rules') != [{
         'apiGroups': [''], 'resources': ['pods'], 'verbs': ['get', 'list', 'watch']
     }]:

@@ -205,7 +205,7 @@ case "$cmd" in
    oc get rollouts.argoproj.io -n "$NS"
    oc get svc -n "$NS"
    oc get httproutes.gateway.networking.k8s.io -n "$NS"
-   oc get route full-multi -n "$NS"
+   oc get route multi-ambient -n "$NS"
    oc -n "$ARGOCD_NS" get application "$APP" \
      -o custom-columns='NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status,REVISION:.status.sync.revision'
    oc get rolloutmanager -A
@@ -217,7 +217,7 @@ case "$cmd" in
    ;;
  traffic)
    require curl
-   host="$(oc get route full-multi -n "$NS" -o jsonpath='{.spec.host}')"
+   host="$(oc get route multi-ambient -n "$NS" -o jsonpath='{.spec.host}')"
    front_track="${FRONT_TRACK:-stable}"
    backend_track="${BACKEND_TRACK:-stable}"
    db_track="${DB_TRACK:-active}"

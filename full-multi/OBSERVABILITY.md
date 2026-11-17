@@ -47,5 +47,5 @@ Acceptance: verify 2xx responses for all four Blue/Green paths, Kiali workload
 metrics, trace export counters, tenant routing, and retrieval from Tempo.
 
 The optional `full-multi-otel-k8sattributes.py` and its RBAC manifest target
-the original `full-multi` namespace and the shared Collector. They are not
-part of this ambient deployment and do not provide ambient namespace enrichment.
+`multi-ambient` and the shared Collector. They do not run as part of this
+deployment; inspect the existing Collector configuration before using them.

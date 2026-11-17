@@ -136,7 +136,7 @@ for another demo, run `prepare` and `start` again.
 For user-visible data-path verification:
 
 ```bash
-HOST="$(oc -n multi-ambient get route full-multi -o jsonpath='{.spec.host}')"
+HOST="$(oc -n multi-ambient get route multi-ambient -o jsonpath='{.spec.host}')"
 for app in a b; do
   for db in blue green; do
     curl -kfsS -H "x-app-target: $app" -H 'x-front-track: stable' \

@@ -4,7 +4,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: otel-full-multi-reader
-  namespace: full-multi
+  namespace: multi-ambient
   labels:
     app.kubernetes.io/managed-by: full-multi-otel-enrichment
 rules:
@@ -16,7 +16,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: otel-full-multi-reader
-  namespace: full-multi
+  namespace: multi-ambient
   labels:
     app.kubernetes.io/managed-by: full-multi-otel-enrichment
 subjects:

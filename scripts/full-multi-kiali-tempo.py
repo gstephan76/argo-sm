@@ -5,7 +5,7 @@ Default: read-only plan. The proposed health URL uses a tenant-authorized
 TraceQL search instead of /api/echo (403 on the demo Tempo gateway).
 --apply performs a merge patch only in Kiali's
 spec.external_services.tracing; no other Kiali settings are replaced.
-This is a platform-level operation, not part of full-multi Argo CD sync.
+This is a platform-level operation, not part of multi-ambient Argo CD sync.
 """
 import argparse
 import json
@@ -57,7 +57,7 @@ def main():
             'provider': 'tempo',
             'use_grpc': False,
             'internal_url': api,
-            'health_check_url': api + '/api/search?q=' + quote('{ resource.k8s.namespace.name = "full-multi" }', safe='') + '&limit=1',
+            'health_check_url': api + '/api/search?q=' + quote('{ resource.k8s.namespace.name = "multi-ambient" }', safe='') + '&limit=1',
             'namespace_selector': True,
             'disable_version_check': True,
             'external_url': 'https://' + console_host,

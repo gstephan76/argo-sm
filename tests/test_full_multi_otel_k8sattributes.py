@@ -68,7 +68,7 @@ class TestPatch(unittest.TestCase):
                     mod.collector_snapshot()
 
     def test_processor_scope_and_association(self):
-        self.assertEqual(mod.PROCESSOR['filter']['namespace'], 'full-multi')
+        self.assertEqual(mod.PROCESSOR['filter']['namespace'], 'multi-ambient')
         self.assertEqual(mod.PROCESSOR['extract']['metadata'], [
             'k8s.namespace.name', 'k8s.pod.name', 'k8s.pod.uid'
         ])

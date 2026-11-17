@@ -380,10 +380,10 @@ def wait_ready(ns, timeout, poll):
                       (oc_json('-n', ns, 'get', 'httproutes.gateway.networking.k8s.io').get('items') or [])}
             pending.extend(gateway_api_readiness(gateways, routes))
         if not pending:
-            route = oc_json('-n', ns, 'get', 'route', 'full-multi')
+            route = oc_json('-n', ns, 'get', 'route', 'multi-ambient')
             host = (route.get('spec') or {}).get('host')
             if not host:
-                raise BootstrapError('Route/full-multi has no host')
+                raise BootstrapError('Route/multi-ambient has no host')
             print(f'PASS all six Rollouts Healthy, gateway available, route=https://{host}', flush=True)
             print('INFO Tempo ingestion and Kiali trace visibility require separate end-to-end checks.', flush=True)
             return

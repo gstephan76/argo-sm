@@ -41,6 +41,13 @@ class AmbientContractTests(unittest.TestCase):
                     self.assertEqual(obj['metadata']['namespace'], 'multi-ambient', name)
                 self.assertNotIn('.full-multi.svc.cluster.local', yaml.safe_dump(obj), name)
 
+    def test_openshift_route_uses_ambient_name_and_gateway(self):
+        route = load('route.yaml')
+        self.assertEqual(route['kind'], 'Route')
+        self.assertEqual(route['metadata']['name'], 'multi-ambient')
+        self.assertEqual(route['metadata']['namespace'], 'multi-ambient')
+        self.assertEqual(route['spec']['to']['name'], 'full-multi-gateway-istio')
+
     def test_ingress_header_precedence_and_weighted_defaults(self):
         route = load('front-httproute.yaml')
         for target in ('a', 'b', 'unknown', None):

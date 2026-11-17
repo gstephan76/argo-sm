@@ -60,10 +60,10 @@ def check_routes(state):
 
 
 def check_forced_tracks():
-    route = workflow.ocjson('-n', 'multi-ambient', 'get', 'route', 'full-multi')
+    route = workflow.ocjson('-n', 'multi-ambient', 'get', 'route', 'multi-ambient')
     host = route.get('spec', {}).get('host')
     if not host:
-        raise workflow.Failure('Route/full-multi has no host')
+        raise workflow.Failure('Route/multi-ambient has no host')
     for app in 'ab':
         for front in ('stable', 'canary'):
             for backend in ('stable', 'canary'):

@@ -17,8 +17,8 @@ if [[ "$1" == --preview ]]; then
 else
   APPS="$2"
 fi
-HOST="$(oc -n "$NS" get route full-multi -o jsonpath='{.spec.host}')"
-[[ -n "$HOST" ]] || { echo 'Route/full-multi has no hostname' >&2; exit 1; }
+HOST="$(oc -n "$NS" get route multi-ambient -o jsonpath='{.spec.host}')"
+[[ -n "$HOST" ]] || { echo 'Route/multi-ambient has no hostname' >&2; exit 1; }
 for app in $APPS; do
   python3 "$(dirname "$0")/full-multi-crud-pause-gate.py" --instance "$app"
   for track in blue green; do

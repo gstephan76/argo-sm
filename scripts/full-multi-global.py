@@ -358,10 +358,10 @@ def commit_blue(apps=APPS):
 
 def baseline_e2e(apps=APPS):
     """Check HTTP -> Front -> Backend -> CRUD -> each A/B English DB."""
-    route = ocjson("-n", "multi-ambient", "get", "route", "full-multi")
+    route = ocjson("-n", "multi-ambient", "get", "route", "multi-ambient")
     host = route.get("spec", {}).get("host", "")
     if not host:
-        raise Failure("Route/full-multi lacks .spec.host")
+        raise Failure("Route/multi-ambient lacks .spec.host")
     for app in apps:
         headers = ["-H", f"x-app-target: {app}", "-H", "x-front-track: stable",
                    "-H", "x-backend-track: stable", "-H", "x-db-track: blue"]

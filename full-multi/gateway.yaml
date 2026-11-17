@@ -9,18 +9,3 @@ spec:
     - name: http
       port: 80
       protocol: HTTP
----
-apiVersion: route.openshift.io/v1
-kind: Route
-metadata:
-  name: full-multi
-  namespace: multi-ambient
-spec:
-  to:
-    kind: Service
-    name: full-multi-gateway-istio
-  port:
-    targetPort: 80
-  tls:
-    termination: edge
-    insecureEdgeTerminationPolicy: Redirect

@@ -65,7 +65,7 @@ Blue baseline. It commits and pushes workflow changes to `multi-ambient`.
 The setup uses existing database Secrets, or the standard credential inputs for
 first provisioning. It never removes the PVCs.
 
-## Global prepare: any *valid* Rollout lifecycle state
+## Global prepare: any _valid_ Rollout lifecycle state
 
 ```bash
 cd ~/Documents/POCs/argo-sm
@@ -127,7 +127,7 @@ python3 scripts/full-multi-e2e.py --state paused
 python3 -m unittest discover -s tests -p test_full_multi_global.py
 ```
 
-There is no automatic GitHub write action through ChatGPT. After reviewing the installed scripts, commit and push them using your own `git` credentials. **Never commit the SM `.env`, generated Tempo secrets, or database credentials.**
+After reviewing the installed scripts, commit and push them using your own `git` credentials. **Never commit the SM `.env`, generated Tempo secrets, or database credentials.**
 
 The read-only E2E entry point checks the active Gateway and HTTPRoutes, GitOps
 sync, actual configured canary weights, the existing database and rollout

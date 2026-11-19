@@ -17,10 +17,10 @@ spec:
   template:
     metadata:
       annotations:
-        demo-rollout-revision: candidate-yellow-20261117T223415Z
+        demo-rollout-revision: baseline-blue
       labels:
         app: crud-a
-        demo.crud-track: green
+        demo.crud-track: blue
         app.kubernetes.io/name: full-multi-crud
     spec:
       containers:
@@ -35,9 +35,9 @@ spec:
             - name: MESSAGE_PREFIX
               value: "Application A - CRUD"
             - name: DB_HOST
-              value: mariadb-a-green.multi-ambient.svc.cluster.local
+              value: mariadb-a-blue.multi-ambient.svc.cluster.local
             - name: DB_TRACK
-              value: green
+              value: blue
             - name: DB_NAME
               value: bookdb
             - name: DB_USER

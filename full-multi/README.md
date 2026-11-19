@@ -28,6 +28,9 @@ application boundary as follows:
 2. **Create ingress and L7 routing.** The OpenShift
    [Route](route.yaml) terminates TLS at the edge and forwards to the
    Service generated for [Gateway/full-multi-gateway](gateway.yaml).
+   The Gateway explicitly requests a `ClusterIP` Service using
+   `networking.istio.io/service-type`; external access belongs to the OpenShift
+   Route and does not wait for a separate LoadBalancer address.
    [front-httproute.yaml](front-httproute.yaml) selects application A or B
    and the Frontend stable/canary Service from the request headers. The
    [service waypoint](waypoint.yaml), using `istio-waypoint` and HBONE,
@@ -79,6 +82,12 @@ transient reads and status-only patch races have bounded retries, and existing
 credentials and storage are preserved. A missing demo Secret is generated only
 before its app has storage or workloads. GitOps sync and local tests alone do not prove
 working traffic, telemetry collection or trace retrieval.
+
+The prerequisite installer maps the OpenShift SSO user `admin` to Argo CD's
+`role:admin`, after verifying that user already has a direct OpenShift
+cluster-admin binding. It includes `preferred_username` in Argo CD's RBAC
+scopes and preserves existing policies and default access. This allows the
+SSO account to see the `multi-ambient` Application in the Argo CD UI.
 
 ## Contract
 

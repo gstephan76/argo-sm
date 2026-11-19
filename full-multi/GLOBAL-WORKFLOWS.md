@@ -30,6 +30,18 @@ the Rollouts CLI, cluster and GitHub access, and `oc`, Git, Python, Bash, `jq`,
 using the approved `latest` GitOps Operator channel and preserves unrelated
 plugins. It reuses Service Mesh, OpenTelemetry and Tempo. See [AMBIENT.md](AMBIENT.md).
 
+The ingress Gateway explicitly requests a `ClusterIP` Service: the OpenShift
+Route owns external exposure. Waiting for an unassigned LoadBalancer address
+would hold Gateway health and prevent later Rollout sync waves from starting.
+During sync, `prepare` prints Argo CD's blocking message and a status heartbeat.
+
+For the approved demo SSO account, the installer verifies that OpenShift user
+`admin` already has a direct cluster-admin binding, then adds `g, admin,
+role:admin` to the ArgoCD instance policy and `preferred_username` to its RBAC
+scopes. Existing mappings and the default policy remain intact. Conflicting
+explicit mappings are refused. The operator reconciles the policy ConfigMap;
+the installer does not edit that generated ConfigMap directly.
+
 The credential step uses `--generate-demo`: random values are not printed and
 existing Secrets are left alone. An interrupted pair is completed by generating only
 the missing app's Secret, provided that app has no workloads or PVCs. Existing

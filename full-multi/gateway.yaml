@@ -3,6 +3,8 @@ kind: Gateway
 metadata:
   name: full-multi-gateway
   namespace: multi-ambient
+  annotations:
+    networking.istio.io/service-type: ClusterIP
 spec:
   gatewayClassName: istio
   listeners:

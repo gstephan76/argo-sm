@@ -47,6 +47,8 @@ class AmbientContractTests(unittest.TestCase):
         self.assertEqual(route['metadata']['name'], 'multi-ambient')
         self.assertEqual(route['metadata']['namespace'], 'multi-ambient')
         self.assertEqual(route['spec']['to']['name'], 'full-multi-gateway-istio')
+        gateway = load('gateway.yaml')
+        self.assertEqual(gateway['metadata']['annotations']['networking.istio.io/service-type'], 'ClusterIP')
 
     def test_ingress_header_precedence_and_weighted_defaults(self):
         route = load('front-httproute.yaml')

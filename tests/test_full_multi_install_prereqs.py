@@ -12,6 +12,49 @@ spec.loader.exec_module(mod)
 
 
 class PrerequisiteTests(unittest.TestCase):
+    def sso_binding(self):
+        return {'roleRef': {'kind': 'ClusterRole', 'name': 'cluster-admin'},
+                'subjects': [{'kind': 'User', 'name': 'admin'}]}
+
+    def test_sso_admin_mapping_preserves_policy_and_default(self):
+        rbac = {'policy': 'g, existing-group, role:readonly\n', 'defaultPolicy': '', 'scopes': '[groups, email]'}
+        instance = {'metadata': {'resourceVersion': '8'}, 'spec': {'rbac': rbac}}
+        with patch.object(mod, 'get', return_value={'metadata': {'name': 'admin'}}), \
+             patch.object(mod, 'oc', return_value=json.dumps({'items': [self.sso_binding()]})), \
+             patch.object(mod, 'wait_for', return_value=instance), patch.object(mod, 'patch') as update:
+            mod.ensure_sso_admin()
+        updated = update.call_args.args[-1][0]['value']
+        self.assertEqual(updated['policy'], rbac['policy'] + 'g, admin, role:admin\n')
+        self.assertEqual(updated['defaultPolicy'], '')
+        self.assertEqual(json.loads(updated['scopes']), ['groups', 'email', 'preferred_username'])
+
+    def test_sso_admin_mapping_rerun_does_not_patch(self):
+        instance = {'spec': {'rbac': {'policy': 'g, admin, role:admin\n',
+                                     'scopes': '[groups, preferred_username]'}}}
+        with patch.object(mod, 'get', return_value={}), \
+             patch.object(mod, 'oc', return_value=json.dumps({'items': [self.sso_binding()]})), \
+             patch.object(mod, 'wait_for', return_value=instance), patch.object(mod, 'patch') as update:
+            mod.ensure_sso_admin()
+        update.assert_not_called()
+
+    def test_sso_admin_grant_requires_existing_cluster_admin_identity(self):
+        for user, bindings in [(None, [self.sso_binding()]), ({}, [])]:
+            with self.subTest(user=user, bindings=bindings), patch.object(mod, 'get', return_value=user), \
+                 patch.object(mod, 'oc', return_value=json.dumps({'items': bindings})), patch.object(mod, 'patch') as update:
+                with self.assertRaisesRegex(mod.Failure, 'unverified'):
+                    mod.ensure_sso_admin()
+                update.assert_not_called()
+
+    def test_sso_admin_refuses_conflicting_policy_or_malformed_scopes(self):
+        for rbac in [{'policy': 'g, admin, role:readonly', 'scopes': '[groups]'},
+                     {'scopes': 'unexpected'}]:
+            with self.subTest(rbac=rbac), patch.object(mod, 'get', return_value={}), \
+                 patch.object(mod, 'oc', return_value=json.dumps({'items': [self.sso_binding()]})), \
+                 patch.object(mod, 'wait_for', return_value={'spec': {'rbac': rbac}}), patch.object(mod, 'patch') as update:
+                with self.assertRaises(mod.Failure):
+                    mod.ensure_sso_admin()
+                update.assert_not_called()
+
     def test_manager_recovers_status_race_then_rerun_does_not_write(self):
         manager = self.manager_snapshot()
         manager['status'] = {'phase': 'Available', 'rolloutController': 'Available'}

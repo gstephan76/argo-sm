@@ -1,5 +1,7 @@
 """Offline regression tests: no oc access and no cluster mutation."""
 import importlib.util
+import contextlib
+import io
 from pathlib import Path
 import unittest
 from unittest.mock import patch
@@ -11,6 +13,17 @@ spec.loader.exec_module(mod)
 
 
 class BootstrapTests(unittest.TestCase):
+    def test_wait_sync_reports_the_resource_blocking_progress(self):
+        waiting = {'status': {'sync': {'revision': 'new', 'status': 'OutOfSync'},
+                             'operationState': {'phase': 'Running',
+                                                'message': 'waiting for healthy state of Gateway/full-multi-gateway'}}}
+        synced = {'status': {'sync': {'revision': 'new', 'status': 'Synced'}}}
+        output = io.StringIO()
+        with patch.object(mod, 'oc_json', side_effect=[waiting, synced]), patch.object(mod.time, 'sleep'), \
+             contextlib.redirect_stdout(output):
+            mod.wait_sync('multi-ambient', 'openshift-gitops', 'new', 10, 1)
+        self.assertIn('waiting for healthy state of Gateway/full-multi-gateway', output.getvalue())
+
     def test_no_controller_is_not_healthy(self):
         self.assertFalse(mod.manager_ready({'spec': {'namespaceScoped': False},
                                            'status': {'phase': 'Pending', 'rolloutController': 'Pending'}}))

@@ -245,15 +245,20 @@ def sync_snapshot(app, target, allow_legacy_prune_disabled=False):
 def wait_sync(app_name, argocd_ns, revision, timeout, poll, allow_legacy_prune_disabled=False):
     deadline = time.monotonic() + timeout
     last_message = None
+    last_progress = None
     errors_seen = 0
     while True:
         app = oc_json('-n', argocd_ns, 'get', 'application', app_name)
         s = sync_snapshot(app, revision, allow_legacy_prune_disabled)
         message = ('revision=%s sync=%s health=%s operation=%s' %
                    (s['revision'][:12] or 'none', s['sync'], s['health'], s['operation']))
-        if message != last_message:
+        if s['message']:
+            message += ' message=' + s['message']
+        now = time.monotonic()
+        if message != last_message or last_progress is None or now - last_progress >= 30:
             print('GITOPS ' + message, flush=True)
             last_message = message
+            last_progress = now
         if s['done']:
             print(f'PASS Argo CD accepted expected revision {revision[:12]} ({s["sync"]}); '
                   'checking workload readiness separately', flush=True)

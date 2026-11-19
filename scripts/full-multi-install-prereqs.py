@@ -3,11 +3,13 @@
 
 The default is read-only. --apply creates the operator and one cluster-scoped
 RolloutManager if absent, enables the supported GitOps console plugin, and
-configures the Gateway API traffic plugin and namespace-scoped RBAC. Existing
+configures the Gateway API traffic plugin, namespace-scoped RBAC and the
+approved OpenShift SSO admin mapping for the Argo CD UI. Existing
 conflicts are rejected; existing unrelated plugins and console entries survive.
 No application, database, Secret, or Service Mesh installation is performed.
 """
 import argparse
+import csv
 import json
 from pathlib import Path
 import subprocess
@@ -183,6 +185,40 @@ def ensure_console():
         print('OK GitOps console plugin already enabled', flush=True)
 
 
+def ensure_sso_admin():
+    # This demo explicitly authorizes the OpenShift SSO user admin. Confirm
+    # its existing cluster-admin binding before granting the Argo CD role.
+    user = get('users.user.openshift.io', 'admin')
+    bindings = json.loads(oc('get', 'clusterrolebindings', '-o', 'json')).get('items', [])
+    authorized = any(binding.get('roleRef', {}).get('kind') == 'ClusterRole' and
+                     binding.get('roleRef', {}).get('name') == 'cluster-admin' and
+                     any(subject.get('kind') == 'User' and subject.get('name') == 'admin'
+                         for subject in binding.get('subjects') or []) for binding in bindings)
+    if user is None or not authorized:
+        raise Failure('OpenShift SSO user admin must already have a direct cluster-admin binding; refusing an unverified Argo CD admin grant')
+    instance = wait_for('GitOps ArgoCD instance', lambda: get('argocds.argoproj.io', ARGO_NS, ARGO_NS), lambda x: True)
+    rbac = (instance.get('spec') or {}).get('rbac') or {}
+    policy = rbac.get('policy') or ''
+    rows = [[value.strip() for value in row] for row in csv.reader(policy.splitlines())]
+    grants = [row for row in rows if len(row) >= 3 and row[:2] == ['g', 'admin']]
+    if any(row != ['g', 'admin', 'role:admin'] for row in grants):
+        raise Failure('Existing Argo CD admin mapping conflicts with role:admin; inspect before proceeding')
+    raw_scopes = rbac.get('scopes') or '[groups]'
+    if not isinstance(raw_scopes, str) or not raw_scopes.startswith('[') or not raw_scopes.endswith(']'):
+        raise Failure('Unexpected Argo CD RBAC scopes; inspect before proceeding')
+    scopes = [value.strip().strip('\"\'') for value in raw_scopes[1:-1].split(',') if value.strip()]
+    updated = dict(rbac)
+    if not grants:
+        updated['policy'] = policy + ('' if not policy or policy.endswith('\n') else '\n') + 'g, admin, role:admin\n'
+    if 'preferred_username' not in scopes:
+        updated['scopes'] = json.dumps(scopes + ['preferred_username'])
+    if updated != rbac:
+        patch('argocds.argoproj.io', ARGO_NS, ARGO_NS, instance,
+              [{'op': 'add', 'path': '/spec/rbac', 'value': updated}])
+    else:
+        print('OK OpenShift SSO admin already mapped to Argo CD role:admin', flush=True)
+
+
 def select_manager(items):
     if not items:
         return None
@@ -302,6 +338,7 @@ def main():
             ensure_operator()
             ensure_namespace()
             ensure_console()
+            ensure_sso_admin()
             owner_ns, account = ensure_manager()
             ensure_rbac(owner_ns, account)
             ensure_gitops_gateway_rbac()

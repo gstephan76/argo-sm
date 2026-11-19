@@ -26,11 +26,11 @@ loaded; configuration and RBAC alone do not prove that it is running. See the
    Application name is available and that server-side admission accepts the
    rendered manifests. The platform owner must configure any missing shared
    prerequisites.
-2. Follow [GLOBAL-WORKFLOWS.md](GLOBAL-WORKFLOWS.md) to install GitOps and
-   Rollouts prerequisites and provision the new namespace, Secrets, four
-   independent databases and the GitOps Application. For disposable demo
-   credentials the Secrets script can generate random values; existing Secrets
-   are never rotated automatically.
+2. Run `scripts/full-multi prepare` as described in
+   [GLOBAL-WORKFLOWS.md](GLOBAL-WORKFLOWS.md). It configures OVN, installs the
+   GitOps/Rollouts prerequisites, provisions missing demo Secrets and four
+   independent databases, deploys the GitOps Application and establishes Blue.
+   Existing Secrets are never rotated automatically.
 3. Confirm ambient labels and the absence of sidecar injection labels, then
    inspect Gateway and HTTPRoute status, Rollouts, PVCs, and endpoint traffic.
    Verify the waypoint and ZTunnel, Kiali metrics, and new Tempo traces. Test

@@ -1,7 +1,9 @@
 """Regression tests for scoped prepare; mocked Git/oc, no cluster mutations."""
 import importlib.util
+import os
 import subprocess
 from pathlib import Path
+import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -13,6 +15,24 @@ S.loader.exec_module(M)
 
 
 class ScopedPrepareTests(unittest.TestCase):
+    def test_canonical_prepare_defaults_to_both_and_preserves_explicit_scope(self):
+        root = P.parents[1]
+        with tempfile.TemporaryDirectory() as tmp:
+            python = Path(tmp) / 'python3'
+            python.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+            python.chmod(0o755)
+            for instance in (None, 'all', 'a', 'b'):
+                env = dict(os.environ, PATH=f'{tmp}:{os.environ["PATH"]}')
+                env.pop('INSTANCE', None)
+                if instance is not None:
+                    env['INSTANCE'] = instance
+                with self.subTest(instance=instance):
+                    result = subprocess.run(['bash', str(root / 'scripts/full-multi'), 'prepare'],
+                                            env=env, capture_output=True, text=True, timeout=10)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout.splitlines(), [
+                        'scripts/full-multi-global.py', 'prepare', '--instance', instance or 'all', '--apply', '--push'])
+
     def test_scoped_prepare_executes_only_a(self):
         args = SimpleNamespace(instance="a", timeout=600)
         with patch.object(M, "assert_git_clean") as clean, \

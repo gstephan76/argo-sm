@@ -15,13 +15,18 @@ if [[ "${1:-help}" == start && "${INSTANCE:-all}" == all ]]; then
   echo 'PASS: both independent applications started; CRUD-A/B Paused indefinitely, 4 MariaDB volumes isolated'
   exit 0
 fi
-INSTANCE="${INSTANCE:-a}"
-[[ "$INSTANCE" == a || "$INSTANCE" == b ]] || { echo 'INSTANCE must be a or b' >&2; exit 1; }
+cmd="${1:-help}"
+if [[ "$cmd" == prepare ]]; then
+  INSTANCE="${INSTANCE:-all}"
+  [[ "$INSTANCE" == a || "$INSTANCE" == b || "$INSTANCE" == all ]] || { echo 'INSTANCE must be a, b or all' >&2; exit 1; }
+else
+  INSTANCE="${INSTANCE:-a}"
+  [[ "$INSTANCE" == a || "$INSTANCE" == b ]] || { echo 'INSTANCE must be a or b' >&2; exit 1; }
+fi
 NS=multi-ambient; APP=multi-ambient; ARGOCD_NS="${ARGOCD_NAMESPACE:-openshift-gitops}"
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-900}"; POLL_SECONDS="${POLL_SECONDS:-5}"
 # Front/Backend Canary: step 6 pauses at 50%; CRUD BlueGreen has no canary step.
 CANARY_PAUSE_STEP_INDEX=6
-cmd="${1:-help}"
 fail(){ echo "ERROR: $*" >&2; exit 1; }
 require(){ command -v "$1" >/dev/null || fail "Missing $1"; }
 valid_origin(){
@@ -124,9 +129,8 @@ case "$cmd" in
    echo 'PASS: full-multi GitOps synchronized and workloads ready; HTTP/Tempo acceptance remains separate'
    ;;
  prepare)
-   # One authoritative reset implementation: selected form of global prepare.
-   # It aborts a paused GREEN candidate, never promotes GREEN, and changes
-   # only the selected application's three Rollout templates/history.
+   # Unscoped prepare installs prerequisites and establishes both Blue apps.
+   # Explicit INSTANCE=a|b retains the selected application's reset contract.
    exec python3 scripts/full-multi-global.py prepare --instance "$INSTANCE" --apply --push
    ;;
  start)
@@ -136,7 +140,7 @@ case "$cmd" in
    rollouts_cli
    python3 scripts/full-multi-bootstrap.py preflight \
      --namespace "$NS" --argocd-namespace "$ARGOCD_NS"
-   oc get application "$APP" -n "$ARGOCD_NS" >/dev/null || fail 'Run deploy first'
+   oc get application "$APP" -n "$ARGOCD_NS" >/dev/null || fail 'Run scripts/full-multi prepare first'
    # Read-only grants are mandatory before enabling the Green preview.
    bash scripts/full-multi-db-readonly.sh --verify
    source_marker="$(sed -n 's/^        demo-rollout-revision: //p' "full-multi/rollout-crud-$INSTANCE.yaml")"
@@ -234,7 +238,10 @@ case "$cmd" in
    done
    ;;
  help|-h|--help)
-   echo 'Usage: INSTANCE=a|b bash scripts/full-multi.sh validate|deploy|prepare|start|promote|cleanup|traffic|status'
+   echo 'Usage: scripts/full-multi prepare|start|status'
+   echo 'prepare installs prerequisites and prepares both applications; start starts both applications.'
+   echo 'Use INSTANCE=a|b scripts/full-multi prepare|start|promote|cleanup|traffic for one application.'
+   echo 'validate and deploy remain available for lower-level checks and deployment.'
    echo 'Set FRONT_TRACK/BACKEND_TRACK=stable|canary|weighted and DB_TRACK=active|blue|green (or stable|canary).'
    echo 'weighted omits that tier header and lets Istio enforce 50/50 at the canary pause.'
    ;;

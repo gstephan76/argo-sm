@@ -14,6 +14,9 @@ import subprocess
 import sys
 import time
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from full_multi_oc import run_oc
+
 ROOT = Path(__file__).resolve().parents[1]
 OP_NS = 'openshift-gitops-operator'
 ARGO_NS = 'openshift-gitops'
@@ -30,12 +33,11 @@ class Failure(RuntimeError):
 
 def oc(*args, data=None):
     try:
-        p = subprocess.run(['oc', *args], input=data, text=True, capture_output=True, timeout=45)
+        return run_oc(*args, data=data).strip()
+    except subprocess.CalledProcessError as exc:
+        raise Failure(f'oc {" ".join(args[:8])} failed: {(exc.stderr or "").strip()}') from exc
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise Failure(f'oc failed: {exc}') from exc
-    if p.returncode:
-        raise Failure(f'oc {" ".join(args[:8])} failed: {p.stderr.strip()}')
-    return p.stdout.strip()
 
 
 def get(kind, name=None, namespace=None):
@@ -50,18 +52,55 @@ def get(kind, name=None, namespace=None):
 
 
 def create(obj):
-    oc('create', '-f', '-', data=json.dumps(obj))
-    print(f"CREATED {obj['kind']}/{obj['metadata']['name']}", flush=True)
+    def matches(expected, actual):
+        if isinstance(expected, dict):
+            return isinstance(actual, dict) and all(
+                key in actual and matches(value, actual[key]) for key, value in expected.items())
+        return expected == actual
+
+    try:
+        oc('create', '-f', '-', data=json.dumps(obj))
+    except Failure:
+        # A timeout or AlreadyExists may mean creation succeeded. Inspect the
+        # result instead of replaying the write or adopting different config.
+        live = get(obj['kind'].lower(), obj['metadata']['name'], obj['metadata'].get('namespace'))
+        if live is None or not matches(obj, live):
+            raise
+        print(f"OK {obj['kind']}/{obj['metadata']['name']} already created", flush=True)
+    else:
+        print(f"CREATED {obj['kind']}/{obj['metadata']['name']}", flush=True)
 
 
 def patch(kind, name, namespace, obj, operations):
-    rv = obj['metadata']['resourceVersion']
-    args = ['patch', kind, name]
-    if namespace:
-        args += ['-n', namespace]
-    args += ['--type=json', '-p', json.dumps([{'op': 'test', 'path': '/metadata/resourceVersion', 'value': rv}] + operations)]
-    oc(*args)
-    print(f'UPDATED {kind}/{name}', flush=True)
+    def configuration(value):
+        # Operator status writes advance resourceVersion without changing the
+        # configuration we inspected. Keep identity and all other metadata in
+        # the comparison so a retry cannot overwrite a concurrent edit.
+        result = {k: v for k, v in value.items() if k not in ('status', 'metadata')}
+        result['metadata'] = {k: v for k, v in value['metadata'].items()
+                              if k not in ('resourceVersion', 'managedFields')}
+        return result
+
+    for attempt in range(3):
+        rv = obj['metadata']['resourceVersion']
+        args = ['patch', kind, name]
+        if namespace:
+            args += ['-n', namespace]
+        args += ['--type=json', '-p', json.dumps([{'op': 'test', 'path': '/metadata/resourceVersion', 'value': rv}] + operations)]
+        try:
+            oc(*args)
+        except Failure:
+            if attempt == 2:
+                raise
+            latest = get(kind, name, namespace)
+            if (latest is None or latest['metadata']['resourceVersion'] == rv or
+                    configuration(latest) != configuration(obj)):
+                raise
+            obj = latest
+            print(f'RETRY {kind}/{name}: status changed during patch', flush=True)
+        else:
+            print(f'UPDATED {kind}/{name}', flush=True)
+            return
 
 
 def wait_for(description, read, predicate, seconds=600):
@@ -160,9 +199,20 @@ def ensure_manager():
     items = json.loads(oc('get', 'rolloutmanagers.argoproj.io', '-A', '-o', 'json')).get('items', [])
     manager = select_manager(items)
     if manager is None:
-        oc('create', '-f', str(ROOT / 'platform-monitoring/rollout-manager-cluster.yaml'))
-        print('CREATED cluster-scoped RolloutManager', flush=True)
+        try:
+            oc('create', '-f', str(ROOT / 'platform-monitoring/rollout-manager-cluster.yaml'))
+        except Failure:
+            items = json.loads(oc('get', 'rolloutmanagers.argoproj.io', '-A', '-o', 'json')).get('items', [])
+            created = select_manager(items)
+            if (created is None or created['metadata']['name'] != 'rollout-manager' or
+                    created['metadata']['namespace'] != ARGO_NS):
+                raise
+            print('OK cluster-scoped RolloutManager already created', flush=True)
+        else:
+            print('CREATED cluster-scoped RolloutManager', flush=True)
         manager = get('rolloutmanager', 'rollout-manager', ARGO_NS)
+        if manager is None:
+            raise Failure('RolloutManager disappeared after creation; inspect the cluster before retrying')
     spec = manager.get('spec') or {}
     plugins = spec.get('plugins') or {}
     traffic = plugins.get('trafficManagement') or []
@@ -178,10 +228,9 @@ def ensure_manager():
              lambda x: x.get('status', {}).get('phase') == 'Available' and
              x.get('status', {}).get('rolloutController') == 'Available')
     deployment = wait_for('Rollouts controller', lambda: get('deployment', 'argo-rollouts', ns),
-                          lambda x: x.get('status', {}).get('availableReplicas', 0) >= 1)
-    service_account = deployment.get('spec', {}).get('template', {}).get('spec', {}).get('serviceAccountName')
-    if not service_account:
-        raise Failure('Rollouts controller service account is missing')
+                          lambda x: x.get('status', {}).get('availableReplicas', 0) >= 1 and
+                          bool(x.get('spec', {}).get('template', {}).get('spec', {}).get('serviceAccountName')))
+    service_account = deployment['spec']['template']['spec']['serviceAccountName']
     return ns, service_account
 
 
@@ -206,10 +255,10 @@ def ensure_rbac(owner_ns, account):
 
 
 def ensure_gitops_gateway_rbac():
-    controller = get('statefulset', 'openshift-gitops-application-controller', ARGO_NS)
-    account = (((controller or {}).get('spec') or {}).get('template') or {}).get('spec', {}).get('serviceAccountName')
-    if not account:
-        raise Failure('Cannot identify the GitOps application controller service account')
+    controller = wait_for('GitOps application controller service account',
+                          lambda: get('statefulset', 'openshift-gitops-application-controller', ARGO_NS),
+                          lambda x: bool(x.get('spec', {}).get('template', {}).get('spec', {}).get('serviceAccountName')))
+    account = controller['spec']['template']['spec']['serviceAccountName']
     name = 'multi-ambient-gitops-gateway'
     role = {'apiVersion': 'rbac.authorization.k8s.io/v1', 'kind': 'Role',
             'metadata': {'name': name, 'namespace': APP_NS},

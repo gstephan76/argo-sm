@@ -59,31 +59,25 @@ not install or change them. OVN-Kubernetes uses `routingViaHost: true` so
 ambient workload probes can reach Pods through the host. Changing that setting
 is cluster-wide and can disrupt traffic during reconciliation.
 
-The idempotent scripts used for the prerequisites and initial deployment are:
+Install prerequisites and prepare both applications with one command:
 
 ```bash
-# Read-only inspection first; --apply changes cluster-wide OVN routing.
-python3 scripts/full-multi-ambient-network.py --check
-python3 scripts/full-multi-ambient-network.py --apply
-
-# Installs or checks GitOps, Rollouts, the console plugin and namespace RBAC.
-python3 scripts/full-multi-install-prereqs.py --check
-python3 scripts/full-multi-install-prereqs.py --apply
-
-# Optional disposable credentials for a fresh demo namespace.
-bash scripts/full-multi-secrets.sh --generate-demo
-
-# Inspect the setup plan, then provision the Blue baseline if intended.
-bash scripts/full-multi-global-setup.sh
-bash scripts/full-multi-global-setup.sh --apply --push
+scripts/full-multi prepare
 ```
 
-The setup command can change cluster resources, commit and push Blue templates,
-and reset rollout history. Do not run it to preserve a paused demonstration.
+`prepare` checks and configures OVN local gateway mode, installs or reconciles
+GitOps, Rollouts, the console plugin and namespace RBAC, generates missing demo
+credentials, provisions the four databases, deploys GitOps and establishes the
+Blue baseline with E2E checks. Every stage must succeed before the next begins.
+It can change cluster-wide OVN routing, commit and push Blue templates, and
+reset rollout history. Do not run it to preserve a paused demonstration.
 The scripts preserve existing Secrets and PVCs, and refuse conflicting
 prerequisite resources. See [GLOBAL-WORKFLOWS.md](GLOBAL-WORKFLOWS.md) for
 preconditions, recovery and verification, and [AMBIENT.md](AMBIENT.md) for
-the deployment boundaries. GitOps sync and local tests alone do not prove
+the deployment boundaries. Reuse the same command after an interruption:
+transient reads and status-only patch races have bounded retries, and existing
+credentials and storage are preserved. A missing demo Secret is generated only
+before its app has storage or workloads. GitOps sync and local tests alone do not prove
 working traffic, telemetry collection or trace retrieval.
 
 ## Contract
@@ -125,30 +119,23 @@ Frontend and Backend Canary tracks are independent from the CRUD language:
 
 ## Runbook
 
-Prerequisites follow the original `full-multi` workflow: OpenShift GitOps,
-a cluster-scoped Argo Rollouts controller and CLI, OpenShift and GitHub access,
-a default StorageClass, and the existing Bookshelf and MariaDB images. Local
-setup also uses `oc`, Git, Python, Bash, `jq`, `curl`, and `skopeo`. For first
-provisioning, supply `FULL_MULTI_DB_PASSWORD` and `FULL_MULTI_DB_ROOT_PASSWORD`;
-the setup creates new Secrets and four independent PVCs in `multi-ambient`.
-Ambient canary routing additionally requires the Gateway API plugin described in
-[AMBIENT.md](AMBIENT.md).
+The cluster must already provide ambient Service Mesh, Gateway API and the
+observability stack. Local prerequisites are the Argo Rollouts CLI, OpenShift
+and GitHub access, `oc`, Git, Python, Bash, `jq`, `curl`, and `skopeo`, plus a
+default StorageClass and the existing Bookshelf and MariaDB images. `prepare`
+installs GitOps and the cluster-scoped Rollouts controller, configures the
+Gateway API plugin described in [AMBIENT.md](AMBIENT.md), and provisions missing
+demo Secrets and four independent PVCs in `multi-ambient`.
 
 ```bash
 cd ~/Documents/POCs/argo-sm
-python3 scripts/full-multi-spec.py verify
-(cd full-multi/bookshelf && go test -count=1 ./...)
-# For first provisioning, after creating the namespace and Secrets:
-bash scripts/full-multi-databases.sh --apply
-# After the initial 20-book seed, enforce table-scoped application privileges:
-bash scripts/full-multi-db-readonly.sh --apply
-bash scripts/full-multi-db-readonly.sh --verify
+scripts/full-multi prepare
 ```
 
 ### Simple per-application lifecycle
 
-The canonical commands are **one application at a time**. Use the executable
-script `scripts/full-multi` (or `bash scripts/full-multi.sh`):
+Unscoped `prepare` installs and prepares both applications. After installation,
+use `INSTANCE=a|b` to reset or run just one application:
 
 ```bash
 INSTANCE=a scripts/full-multi prepare
@@ -162,7 +149,7 @@ INSTANCE=b scripts/full-multi start
 INSTANCE=b scripts/full-multi promote  # explicit action only
 ```
 
-`prepare` resets **only the selected application** to the BLUE baseline,
+`INSTANCE=a|b scripts/full-multi prepare` resets **only the selected application** to the BLUE baseline,
 including a paused GREEN candidate. It safely aborts that candidate; it does
 not promote GREEN or touch the other application's Rollouts/Git templates.
 The four MariaDB StatefulSets and their PVCs remain intact. Because `prepare`
@@ -175,9 +162,9 @@ paused. `promote` advances only the selected application's CRUD, Backend and
 Frontend Rollouts, and is never implicit. **Never run `prepare` while you want
 to preserve that application's paused GREEN demonstration.**
 
-To start both applications in sequence, `bash scripts/full-multi.sh start`
-(without `INSTANCE`) remains supported. The deliberate A+B reset still uses
-`bash scripts/full-multi-global-prepare.sh --apply --push`.
+To start both applications in sequence, use `scripts/full-multi start`
+without `INSTANCE`. Repeat `scripts/full-multi prepare` to reconcile the
+installation and deliberately reset both applications to Blue.
 
 `prepare` establishes a Blue active baseline. If a previous Green revision was
 promoted, resetting Blue is an explicit *pre-demo* rebaseline; a paused BLUE

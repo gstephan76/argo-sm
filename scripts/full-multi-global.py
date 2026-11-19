@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Full-multi global setup and deterministic Blue rebaseline.
+"""Full-multi installation and deterministic Blue preparation.
 
-Ambient Service Mesh and the Gateway API plugin are shared platform prerequisites.
+Prepare installs GitOps/Rollouts and configures OVN for the existing ambient mesh.
 All writes require --apply. GitOps changes require --push. No PVC deletion.
 """
 from __future__ import annotations
@@ -18,6 +18,9 @@ import time
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
+sys.path.insert(0, str(HERE))
+from full_multi_oc import run_oc
+
 EXPECTED_SM_REMOTE = "github.com/gstephan76/SM"
 ROLES = ("crud", "backend", "front")
 APPS = ("a", "b")
@@ -57,24 +60,25 @@ def silent(args, *, cwd=None, timeout=35):
 
 
 def ocjson(*args, optional=False):
-    proc = silent(["oc", *args, "-o", "json"])
-    if proc.returncode:
-        if optional and ("NotFound" in proc.stderr or "not found" in proc.stderr):
-            return None
-        raise Failure(f"oc {' '.join(args)}: {proc.stderr.strip()}")
     try:
-        return json.loads(proc.stdout)
+        raw = run_oc(*args, *(['--ignore-not-found'] if optional else []), '-o', 'json')
+    except subprocess.CalledProcessError as exc:
+        error = exc.stderr or ''
+        if optional and ('NotFound' in error or 'not found' in error):
+            return None
+        raise Failure(f"oc {' '.join(args)}: {error.strip()}") from exc
+    except (OSError, subprocess.TimeoutExpired, ValueError) as exc:
+        raise Failure(f"oc {' '.join(args)}: {exc}") from exc
+    try:
+        if optional and not raw.strip():
+            return None
+        return json.loads(raw)
     except ValueError as exc:
         raise Failure(f"Invalid JSON from oc {' '.join(args)}: {exc}") from exc
 
 
 def maybe_oc_json(*args):
-    proc = silent(["oc", *args, "-o", "json"])
-    if proc.returncode:
-        if "not found" in proc.stderr.lower() or "notfound" in proc.stderr.lower():
-            return None
-        raise Failure(f"oc {' '.join(args)}: {proc.stderr.strip()}")
-    return json.loads(proc.stdout)
+    return ocjson(*args, optional=True)
 
 
 def git(*args, cwd=ROOT):
@@ -119,7 +123,7 @@ def assert_git_clean(instance="all"):
     return local
 
 
-def preflight_local():
+def preflight_local(*, require_prereqs=True):
     for cmd in ("oc", "git", "python3", "bash", "jq", "curl", "skopeo"):
         if not shutil.which(cmd):
             raise Failure(f"Missing local command: {cmd}")
@@ -130,9 +134,11 @@ def preflight_local():
         call(["bash", "-n", f"scripts/{name}"], cwd=ROOT, timeout=10)
     call(["git", "diff", "--check"], cwd=ROOT, timeout=20)
     call(["oc", "whoami"], timeout=40)
-    call(["oc", "get", "namespace", "openshift-gitops"], timeout=35)
+    if not require_prereqs:
+        return
+    ocjson('get', 'namespace', 'openshift-gitops')
     for key in ("applications.argoproj.io", "rollouts.argoproj.io", "rolloutmanagers.argoproj.io"):
-        call(["oc", "get", "crd", key], timeout=35)
+        ocjson('get', 'crd', key)
     app_ns = maybe_oc_json("get", "namespace", "multi-ambient")
     if app_ns is not None:
         labels = app_ns.get("metadata", {}).get("labels", {})
@@ -196,11 +202,6 @@ def assert_no_legacy_mariadb():
 
 def check_rollout_manager():
     managers = ocjson("get", "rolloutmanagers.argoproj.io", "-A").get("items", [])
-    ready = [m for m in managers if m.get("spec", {}).get("namespaceScoped") is False and
-             m.get("status", {}).get("phase") == "Available" and
-             m.get("status", {}).get("rolloutController") == "Available"]
-    if ready:
-        return
     if managers:
         if any(m.get("spec", {}).get("namespaceScoped") is False for m in managers):
             log("Cluster-scoped RolloutManager exists; waiting for controller")
@@ -216,7 +217,7 @@ def check_rollout_manager():
             if (item.get("spec", {}).get("namespaceScoped") is False and
                     s.get("phase") == "Available" and s.get("rolloutController") == "Available"):
                 ns = item.get("metadata", {}).get("namespace", "openshift-gitops")
-                deploy = maybe_oc_json("-n", ns, "get", "deployment", "argo-rollouts")
+                deploy = maybe_oc_json("get", "deployment", "argo-rollouts", "-n", ns)
                 if deploy and deploy.get("status", {}).get("availableReplicas", 0) >= 1:
                     log("PASS cluster-scoped Argo Rollouts controller Ready")
                     return
@@ -408,16 +409,22 @@ def ensure_gitops_app():
 
 
 def setup(args):
+    # One complete installation path, used by unscoped prepare and the legacy
+    # setup alias. Validate Git/local inputs before any cluster-wide changes.
     assert_git_clean()
-    preflight_local()
+    preflight_local(require_prereqs=False)
     verify_images()
+    call([sys.executable, 'scripts/full-multi-ambient-network.py', '--check'], cwd=ROOT, timeout=180)
+    call([sys.executable, 'scripts/full-multi-ambient-network.py', '--apply'], cwd=ROOT, timeout=2100)
+    call([sys.executable, 'scripts/full-multi-install-prereqs.py', '--check'], cwd=ROOT, timeout=1200)
+    call([sys.executable, 'scripts/full-multi-install-prereqs.py', '--apply'], cwd=ROOT, timeout=7200)
+    call(['bash', 'scripts/full-multi-secrets.sh', '--generate-demo'], cwd=ROOT, timeout=900)
     call([sys.executable, 'scripts/full-multi-bootstrap.py', 'preflight-deploy'], cwd=ROOT, timeout=80)
-    log("Ambient mesh and Gateway API plugin are shared platform prerequisites")
+    log("Ambient mesh and observability are shared; GitOps and Gateway API plugin prerequisites reconciled")
     call(["oc", "apply", "-f", "full-multi/namespace.yaml"], cwd=ROOT, timeout=45)
     # The SM stack does not install OpenShift GitOps or its Rollouts operator.
     check_rollout_manager()
     assert_no_legacy_mariadb()
-    call(["bash", "scripts/full-multi-secrets.sh"], cwd=ROOT, timeout=60)
     call([sys.executable, "scripts/full-multi-bootstrap.py", "preflight"], cwd=ROOT, timeout=80)
     call(["bash", "scripts/full-multi-databases.sh", "--apply"], cwd=ROOT, timeout=3000)
     verify_db_volumes()
@@ -439,7 +446,7 @@ def setup(args):
     ensure_gitops_app()
     wait_gitops(git("rev-parse", "HEAD"))
     rebaseline(args, verified=True)
-    log("PASS full-multi global setup: ambient prerequisites + all six Blue Rollouts + four SQL databases")
+    log("PASS full-multi prepare: prerequisites + all six Blue Rollouts + four SQL databases")
 
 
 def rebaseline(args, *, verified=False):
@@ -502,8 +509,8 @@ def main(argv=None):
     if args.timeout < 60:
         parser.error("--timeout must be >=60 seconds")
     if args.command in ("setup", "prepare") and not (args.apply and args.push):
-        stages = ("ambient platform prerequisites -> four DBs -> GitOps -> Blue rebaseline -> E2E -> history reset"
-                  if args.command == "setup" else
+        stages = ("OVN check/apply -> GitOps/Rollouts check/apply -> demo Secrets -> four DBs -> GitOps -> Blue rebaseline -> E2E -> history reset"
+                  if args.command == "setup" or args.instance == "all" else
                   f"verify prerequisites -> abort {args.instance} pending candidates -> GitOps Blue rebaseline -> E2E -> clean selected histories")
         log(f"PLAN ONLY ({args.command}): {stages}")
         log("No changes made. Re-run with --apply --push to authorize changes.")
@@ -514,7 +521,10 @@ def main(argv=None):
         if args.command == "setup":
             setup(args)
         elif args.command == "prepare":
-            rebaseline(args)
+            if args.instance == 'all':
+                setup(args)
+            else:
+                rebaseline(args)
         elif args.command == "e2e":
             baseline_e2e() if args.state == "blue" else paused_e2e()
         else:

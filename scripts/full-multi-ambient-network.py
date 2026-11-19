@@ -8,9 +8,13 @@ OVN configuration and daemonset to reach a stable ready state.
 import argparse
 import configparser
 import json
+from pathlib import Path
 import subprocess
 import sys
 import time
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from full_multi_oc import run_oc
 
 
 class Failure(RuntimeError):
@@ -19,12 +23,11 @@ class Failure(RuntimeError):
 
 def oc(*args):
     try:
-        result = subprocess.run(['oc', *args], text=True, capture_output=True, timeout=45)
+        return run_oc(*args)
+    except subprocess.CalledProcessError as exc:
+        raise Failure(f'oc {" ".join(args[:5])} failed: {(exc.stderr or "").strip()}') from exc
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise Failure(f'oc failed: {exc}') from exc
-    if result.returncode:
-        raise Failure(f'oc {" ".join(args[:5])} failed: {result.stderr.strip()}')
-    return result.stdout
 
 
 def read(kind, name, namespace=None):
@@ -44,6 +47,27 @@ def gateway_setting(network):
     if value is not True and value is not False:
         raise Failure('routingViaHost is absent or invalid; inspect the network configuration')
     return value
+
+
+def ensure_gateway(network):
+    if gateway_setting(network):
+        print('OVN gateway already requested; verifying reconciliation', flush=True)
+        return
+    # Status-only updates must not invalidate this transaction. Guard the
+    # inspected configuration and object identity instead of resourceVersion.
+    operations = [{'op': 'test', 'path': '/metadata/uid', 'value': network['metadata']['uid']},
+                  {'op': 'test', 'path': '/spec', 'value': network['spec']},
+                  {'op': 'replace', 'path': '/spec/defaultNetwork/ovnKubernetesConfig/gatewayConfig/routingViaHost',
+                   'value': True}]
+    try:
+        oc('patch', 'networks.operator.openshift.io', 'cluster', '--type=json', '-p', json.dumps(operations))
+    except Failure:
+        latest = read('networks.operator.openshift.io', 'cluster')
+        if latest['metadata']['uid'] != network['metadata']['uid'] or not gateway_setting(latest):
+            raise
+        print('OVN gateway request already applied; verifying reconciliation', flush=True)
+    else:
+        print('UPDATED cluster OVN gateway mode; waiting for reconciliation', flush=True)
 
 
 def ready(network, operator, daemonset, configmap):
@@ -89,17 +113,7 @@ def main():
         if not args.apply:
             print('Read-only check; no change made.', flush=True)
             return 0
-        if not before:
-            patch = [{'op': 'test', 'path': '/metadata/resourceVersion',
-                      'value': network['metadata']['resourceVersion']},
-                     {'op': 'test', 'path': '/spec/defaultNetwork/ovnKubernetesConfig/gatewayConfig/routingViaHost',
-                      'value': False},
-                     {'op': 'replace', 'path': '/spec/defaultNetwork/ovnKubernetesConfig/gatewayConfig/routingViaHost',
-                      'value': True}]
-            oc('patch', 'networks.operator.openshift.io', 'cluster', '--type=json', '-p', json.dumps(patch))
-            print('UPDATED cluster OVN gateway mode; waiting for reconciliation', flush=True)
-        else:
-            print('OVN gateway already requested; verifying reconciliation', flush=True)
+        ensure_gateway(network)
         deadline, stable_since = time.monotonic() + args.timeout, None
         while time.monotonic() < deadline:
             network = read('networks.operator.openshift.io', 'cluster')

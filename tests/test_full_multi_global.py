@@ -1,7 +1,9 @@
 """Offline contract tests: no cluster or GitHub access required."""
 import importlib.util
+from contextlib import contextmanager, ExitStack
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -12,6 +14,94 @@ S.loader.exec_module(M)
 
 
 class GlobalWorkflowTests(unittest.TestCase):
+    @contextmanager
+    def installation(self, failure=None):
+        with ExitStack() as stack:
+            mocks = {name: stack.enter_context(patch.object(M, name)) for name in (
+                'assert_git_clean', 'preflight_local', 'verify_images', 'check_rollout_manager',
+                'assert_no_legacy_mariadb', 'verify_db_volumes', 'commit_blue', 'ensure_gitops_app',
+                'wait_gitops', 'git', 'rebaseline', 'maybe_oc_json', 'call')}
+            stack.enter_context(patch.object(M.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, '', '')))
+            mocks['git'].return_value = 'testrevision'
+            mocks['maybe_oc_json'].return_value = None
+
+            def command(args, **kwargs):
+                if failure and failure(args):
+                    raise M.Failure('simulated interrupted stage')
+                return 'rendered manifests'
+
+            mocks['call'].side_effect = command
+            yield mocks
+
+    def test_unscoped_prepare_routes_to_complete_installation(self):
+        with patch.object(M, 'setup') as setup, patch.object(M, 'rebaseline') as reset:
+            self.assertEqual(M.main(['prepare', '--apply', '--push']), 0)
+        setup.assert_called_once()
+        self.assertEqual(setup.call_args.args[0].instance, 'all')
+        reset.assert_not_called()
+
+    def test_complete_prepare_runs_prerequisites_in_order_before_databases(self):
+        args = SimpleNamespace(instance='all', timeout=600)
+        with self.installation() as mocks:
+            M.setup(args)
+        mocks['preflight_local'].assert_called_once_with(require_prereqs=False)
+        commands = [call.args[0] for call in mocks['call'].call_args_list]
+        self.assertEqual([command[1:] for command in commands[:5]], [
+            ['scripts/full-multi-ambient-network.py', '--check'],
+            ['scripts/full-multi-ambient-network.py', '--apply'],
+            ['scripts/full-multi-install-prereqs.py', '--check'],
+            ['scripts/full-multi-install-prereqs.py', '--apply'],
+            ['scripts/full-multi-secrets.sh', '--generate-demo']])
+        self.assertIn(['bash', 'scripts/full-multi-databases.sh', '--apply'], commands[5:])
+        mocks['commit_blue'].assert_called_once_with()
+        mocks['ensure_gitops_app'].assert_called_once_with()
+        mocks['rebaseline'].assert_called_once_with(args, verified=True)
+
+    def test_complete_prepare_stops_after_each_failed_prerequisite(self):
+        stages = [('full-multi-ambient-network.py', '--check'),
+                  ('full-multi-ambient-network.py', '--apply'),
+                  ('full-multi-install-prereqs.py', '--check'),
+                  ('full-multi-install-prereqs.py', '--apply'),
+                  ('full-multi-secrets.sh', '--generate-demo')]
+        for index, (script, flag) in enumerate(stages):
+            with self.subTest(stage=(script, flag)), \
+                 self.installation(lambda args: args[1:] == [f'scripts/{script}', flag]) as mocks:
+                self.assertEqual(M.main(['prepare', '--apply', '--push']), 1)
+            self.assertEqual(mocks['call'].call_count, index + 1)
+            mocks['commit_blue'].assert_not_called()
+            mocks['ensure_gitops_app'].assert_not_called()
+            mocks['rebaseline'].assert_not_called()
+
+    def test_complete_prepare_rerun_reuses_existing_application(self):
+        args = SimpleNamespace(instance='all', timeout=600)
+        with self.installation() as mocks:
+            M.setup(args)
+            mocks['maybe_oc_json'].return_value = {'metadata': {'name': 'multi-ambient'}}
+            M.setup(args)
+        # Only the first installation needs Blue published before Application creation.
+        mocks['commit_blue'].assert_called_once_with()
+        self.assertEqual(mocks['ensure_gitops_app'].call_count, 2)
+        self.assertEqual(mocks['rebaseline'].call_count, 2)
+
+    def test_fresh_local_preflight_does_not_require_installed_gitops(self):
+        with patch.object(M.shutil, 'which', return_value='/bin/tool'), patch.object(M, 'call'), \
+             patch.object(M, 'ocjson') as read, patch.object(M, 'maybe_oc_json') as optional:
+            M.preflight_local(require_prereqs=False)
+        read.assert_not_called()
+        optional.assert_not_called()
+
+    def test_available_manager_still_waits_for_actual_controller(self):
+        managers = {'items': [{'metadata': {'namespace': 'openshift-gitops'},
+                               'spec': {'namespaceScoped': False},
+                               'status': {'phase': 'Available', 'rolloutController': 'Available'}}]}
+        with patch.object(M, 'ocjson', return_value=managers), \
+             patch.object(M, 'maybe_oc_json', side_effect=[None, {'status': {'availableReplicas': 1}}]) as read, \
+             patch.object(M.time, 'sleep') as sleep, patch.object(M, 'call') as command:
+            M.check_rollout_manager()
+        self.assertEqual(read.call_count, 2)
+        sleep.assert_called_once()
+        command.assert_not_called()
+
     def test_blue_templates_are_specific_to_application(self):
         def obj(role, app, track="blue", marker="baseline-blue"):
             env = [{"name": "MESSAGE_PREFIX", "value": f"Application {app.upper()} - BLUE"},

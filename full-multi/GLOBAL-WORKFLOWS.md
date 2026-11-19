@@ -1,76 +1,75 @@
-# full-multi: global setup and prepare
+# full-multi: one-command preparation
 
-## Ambient platform prerequisites
+## Install and prepare both applications
 
-The demo tracks `multi-ambient`. Its shared Istio control plane, ambient CNI,
-ZTunnel, Gateway API, Rollouts plugin and observability stack must already be
-installed by their owners. The sidecar-oriented `SM/v3/v3.5` installer is not
-run by the ambient setup workflow. See [AMBIENT.md](AMBIENT.md) before deployment.
-The original `full-multi` requirements still apply: OpenShift GitOps and
-Rollouts CRDs, a cluster-scoped Rollouts controller and CLI, appropriate
-cluster and GitHub access, a StorageClass, the existing application images,
-and the local `oc`, Git, Python, Bash, `jq`, `curl`, and `skopeo` tools. The
-ambient HTTPRoutes also require the Gateway API traffic plugin on that same
-controller. Existing mesh and observability services are reused.
-
-For OVN-Kubernetes ambient probes, the cluster must use local gateway mode.
-Inspect and, when the cluster-wide routing change is authorized, enable it with:
+The canonical command for initial installation and subsequent preparation is:
 
 ```bash
-python3 scripts/full-multi-ambient-network.py --check
-python3 scripts/full-multi-ambient-network.py --apply
+scripts/full-multi prepare
 ```
 
-The apply command changes `routingViaHost` for the whole cluster, then waits
-for OVN's effective local mode and daemonsets to reconcile. Network traffic may
-be disrupted during the transition. The mode is not changed by the regular
-GitOps installer or application setup.
+Without `INSTANCE`, it prepares A and B and owns the complete sequence:
 
-Install the missing GitOps prerequisites separately, using the same script
-for an initial installation and after an interruption:
+1. Validate the local tools, Git branch, clean checkout and published revision.
+2. Run the read-only OVN check, request `routingViaHost=true` if needed, and wait for effective local gateway mode and stable daemonsets.
+3. Check and install/reconcile GitOps, the cluster-scoped Rollouts controller, console plugin, Gateway API traffic plugin and namespace RBAC.
+4. Generate missing disposable demo credentials while preserving existing Secrets.
+5. Provision the four databases, verify distinct PVCs and reconcile SELECT-only application grants.
+6. Publish Blue before creating a fresh GitOps Application, synchronize it, establish all six Healthy Blue Rollouts, run E2E and clear eligible history.
 
-```bash
-python3 scripts/full-multi-install-prereqs.py --check
-python3 scripts/full-multi-install-prereqs.py --apply
-```
+Each stage must succeed before the next starts. Invoking `prepare` authorizes
+cluster-wide OVN changes and GitOps commits/pushes; network reconciliation can
+temporarily disrupt traffic. The helper scripts are implementation steps and
+do not need to be run separately.
 
-The installer uses the approved `latest` GitOps Operator channel, enables the
-operator's OpenShift `gitops-plugin` console UI, reuses or creates a single
-cluster-scoped RolloutManager, configures the Gateway API plugin, and grants
-its service account only the required permissions in `multi-ambient`. It also
-grants the GitOps application controller namespace-scoped Gateway access. It
-preserves unrelated console plugins and traffic plugins, and refuses conflicting
-existing resources. It does not install Service Mesh, OpenTelemetry or Tempo.
-After installation, verify the plugin has loaded in the controller logs; an
-Available RolloutManager alone does not prove that the plugin can run.
+The demo tracks `multi-ambient`. The cluster must already provide ambient
+Istio/CNI/ZTunnel, Gateway API and the observability stack, along with a default
+StorageClass and access to the existing application images. The client needs
+the Rollouts CLI, cluster and GitHub access, and `oc`, Git, Python, Bash, `jq`,
+`curl` and `skopeo`. Prepare installs the missing GitOps/Rollouts prerequisites
+using the approved `latest` GitOps Operator channel and preserves unrelated
+plugins. It reuses Service Mesh, OpenTelemetry and Tempo. See [AMBIENT.md](AMBIENT.md).
 
-For disposable demo credentials, provision new Secrets once with:
+The credential step uses `--generate-demo`: random values are not printed and
+existing Secrets are left alone. An interrupted pair is completed by generating only
+the missing app's Secret, provided that app has no workloads or PVCs. Existing
+Secrets are never read for their values or overwritten. If storage or workloads
+exist for an app whose Secret is missing, restore its original credentials;
+the script refuses to generate replacements. The lower-level Secrets helper
+still supports explicit credential inputs without `--generate-demo`.
 
-```bash
-bash scripts/full-multi-secrets.sh --generate-demo
-```
+### Resilience and rerun contract
 
-It uses random values, does not print them, and leaves existing Secrets alone.
-The standard `FULL_MULTI_DB_PASSWORD` and `FULL_MULTI_DB_ROOT_PASSWORD` inputs
-remain available without `--generate-demo`. Partial existing Secrets are refused.
+The provisioning commands must tolerate reruns after completed stages and
+recoverable interruptions. The setup path reuses `scripts/full_multi_oc.py`:
+transient GET failures have up to three attempts with bounded backoff, including
+DNS, connection and API availability failures. `FULL_MULTI_OC_READ_ATTEMPTS`
+can select 1–5 attempts, and `FULL_MULTI_OC_REQUEST_TIMEOUT` can select a 1–120
+second request timeout (default 30 seconds). Authentication and authorization
+failures are reported immediately.
 
-```bash
-bash scripts/full-multi-global-setup.sh
-bash scripts/full-multi-global-setup.sh --apply --push
-```
+Writes are reconciled from live evidence. The prerequisite installer retries a
+patch at most three times when only status, resourceVersion or managedFields
+changed; it preserves the version guard and refuses configuration or identity
+changes. After an uncertain create response it accepts only a matching live
+resource. Operator-owned controllers and service accounts are awaited rather
+than assumed to exist as soon as their CRDs are established. OVN requests guard
+the network UID and inspected spec, and verify the live setting after an
+uncertain response before waiting for effective network readiness.
 
-Setup validates the ambient prerequisites, provisions the four databases and
-credentials if needed, checks their isolation and grants, and establishes a
-Blue baseline. It commits and pushes workflow changes to `multi-ambient`.
-The setup uses existing database Secrets, or the standard credential inputs for
-first provisioning. It never removes the PVCs.
+After resolving any reported error, rerun `scripts/full-multi prepare`.
+Genuine conflicts, missing credentials for existing
+data, unrelated Git changes and unverified pending commits require inspection;
+they are never repaired by overwriting state. Repeated preparation still deliberately
+establishes Blue and clears eligible history, so use it only for that intended
+operation. Prepare requires a clean checkout synchronized with
+`origin/multi-ambient`; commit and publish reviewed script changes before it.
 
 ## Global prepare: any _valid_ Rollout lifecycle state
 
 ```bash
 cd ~/Documents/POCs/argo-sm
-bash scripts/full-multi-global-prepare.sh
-bash scripts/full-multi-global-prepare.sh --apply --push
+scripts/full-multi prepare
 ```
 
 This is a **deliberate reset**, not a status check:
@@ -83,7 +82,7 @@ This is a **deliberate reset**, not a status check:
 6. Delete completed AnalysisRuns and non-current ReplicaSets with the existing strict history reset implementation; leave the four StatefulSets/PVCs intact.
 7. Re-run E2E. Success means ready for `start` on both applications.
 
-The reset handles previously paused Green, promoted Green, paused Canary, Healthy Blue, and previously aborted updates **when the cluster is otherwise functional**. It fails closed on unrecognized Degraded state, missing controller, bad storage, Git divergence or unhealthy infrastructure: no software can safely promise to recover arbitrary failures by silently deleting resources.
+The reset handles previously paused Green, promoted Green, paused Canary, Healthy Blue, and previously aborted updates **when the cluster is otherwise functional**. It fails closed on unrecognized Degraded state, unavailable storage, Git divergence or unhealthy shared infrastructure. It never deletes data to recover an unexpected failure.
 
 The reset is a sequence of Git, database and cluster operations, not a single
 transaction. After an interruption, inspect the reported error and rerun only

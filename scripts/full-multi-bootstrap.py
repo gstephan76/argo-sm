@@ -6,9 +6,13 @@ Only calls `oc get`; the lifecycle shell script owns the explicit `oc apply`.
 """
 import argparse
 import json
+from pathlib import Path
 import subprocess
 import sys
 import time
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from full_multi_oc import run_oc
 
 EXPECTED_ROLLOUTS = {
     f'{tier}-{instance}' for tier in ('front', 'backend', 'crud')
@@ -21,18 +25,21 @@ class BootstrapError(RuntimeError):
 
 
 def oc_json(*args, allow_missing=False):
-    cmd = ['oc', *args, '-o', 'json']
-    p = subprocess.run(cmd, text=True, capture_output=True, timeout=30)
-    if p.returncode:
-        if allow_missing and ('NotFound' in p.stderr or 'not found' in p.stderr):
+    try:
+        raw = run_oc(*args, *(['--ignore-not-found'] if allow_missing else []), '-o', 'json')
+    except subprocess.CalledProcessError as exc:
+        error = exc.stderr or ''
+        if allow_missing and ('NotFound' in error or 'not found' in error):
             return None
         raise BootstrapError('Command failed: %s\n%s' %
-                             (' '.join(cmd), p.stderr.strip()))
+                             (' '.join(['oc', *args]), error.strip())) from exc
     try:
-        return json.loads(p.stdout)
+        if allow_missing and not raw.strip():
+            return None
+        return json.loads(raw)
     except ValueError as exc:
         raise BootstrapError('Invalid JSON returned by %s: %s' %
-                             (' '.join(cmd), exc)) from exc
+                             (' '.join(['oc', *args]), exc)) from exc
 
 
 def manager_ready(manager):

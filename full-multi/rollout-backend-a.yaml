@@ -17,7 +17,7 @@ spec:
   template:
     metadata:
       annotations:
-        demo-rollout-revision: baseline-blue
+        demo-rollout-revision: candidate-yellow-20261119T195354Z
       labels:
         app: backend-a
         app.kubernetes.io/name: full-multi-bookshelf
@@ -40,7 +40,7 @@ spec:
             - name: ROLE
               value: "backend"
             - name: MESSAGE_PREFIX
-              value: "Application A - BLUE"
+              value: "Application A - YELLOW"
             - name: CRUD_API_URL
               value: "http://crud-a-blue.multi-ambient.svc.cluster.local:8080/api/books"
           ports:
@@ -88,19 +88,19 @@ spec:
               - templateName: smoke-backend-a
             args:
               - name: expected-color
-                value: BLUE
+                value: YELLOW
         - setWeight: 25
         - analysis:
             templates:
               - templateName: smoke-backend-a
             args:
               - name: expected-color
-                value: BLUE
+                value: YELLOW
         - setWeight: 50
         - analysis:
             templates:
               - templateName: smoke-backend-a
             args:
               - name: expected-color
-                value: BLUE
+                value: YELLOW
         - pause: {}
